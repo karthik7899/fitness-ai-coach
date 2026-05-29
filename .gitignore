@@ -1,0 +1,18 @@
+# Secrets & Private Credentials
+.env
+credentials.json
+.streamlit/secrets.toml
+fitness_history.db
+sync_history.log
+
+# Python Cache & Environments
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
+env/
+.env/
+
+# System Files
+.DS_Store
+Thumbs.db
