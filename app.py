@@ -19,6 +19,11 @@ import publish_gdrive
 dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 load_dotenv(dotenv_path)
 
+# Ensure the database schema exists before anything reads from it. On a fresh
+# machine the SQLite file (or Supabase tables) won't exist yet, and the sidebar
+# checks connection status (tokens table) before any sync runs.
+db.init_db()
+
 
 def get_app_url():
     """Public base URL of this app, used as the OAuth redirect target.
