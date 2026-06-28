@@ -1,6 +1,13 @@
 # Fitness AI Coach & Gemini Integrator
 
-A premium local Python application that aggregates your fitness data from **Strava**, **Google Fit** (syncing your Da Fit watch steps and sleep), and **FitNotes** (syncing your strength workout backups from Google Drive), creating a unified dashboard and a specialized **Gemini AI Coach Chat** to query your training data.
+A premium Python application that aggregates your fitness data from **Strava**, **Google Fit** (syncing your Da Fit watch steps and sleep), and **FitNotes** (syncing your strength workout backups from Google Drive), creating a unified dashboard and a specialized **Gemini AI Coach Chat** to query your training data.
+
+> **Want to run this without hosting a server?** It can run fully serverless and
+> free using Supabase + GitHub Actions (and, optionally, Streamlit Community
+> Cloud or the official Gemini app). See **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+
+The instructions below cover running it locally; `DEPLOYMENT.md` covers the
+no-server setup.
 
 ---
 

@@ -27,8 +27,16 @@ jobs:
 
     - name: Run automated sync pipeline
       env:
+        # Shared cloud database (Supabase Postgres). All synced telemetry and
+        # the OAuth tokens live here so every run is stateless.
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        # Strava refreshes itself from the refresh token stored in the DB.
         STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
         STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
+        # Google token minted once locally via `python authorize.py`. Lets the
+        # job sync Google Fit + FitNotes (Drive) and publish the Gemini profile
+        # with no interactive browser flow. Optional if the token is already in
+        # the shared database.
+        GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
       run: |
         python sync_all.py

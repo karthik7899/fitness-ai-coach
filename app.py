@@ -19,6 +19,25 @@ import publish_gdrive
 dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 load_dotenv(dotenv_path)
 
+
+def get_app_url():
+    """Public base URL of this app, used as the OAuth redirect target.
+
+    Defaults to the local Streamlit address. Set APP_URL (env var or Streamlit
+    secret) to your deployed URL, e.g. https://<your-app>.streamlit.app/, when
+    hosting on Streamlit Community Cloud. Must match the Strava app's
+    Authorization Callback Domain.
+    """
+    url = os.getenv("APP_URL")
+    if not url:
+        try:
+            url = st.secrets["APP_URL"]
+        except Exception:
+            url = None
+    if not url:
+        url = "http://localhost:8501/"
+    return url if url.endswith("/") else url + "/"
+
 # Setup page config
 st.set_page_config(
     page_title="Aura // Personal Fitness Coach",
@@ -282,11 +301,18 @@ with st.sidebar:
         st.markdown("<span class='status-badge status-disconnected'>NOT CONNECTED</span>", unsafe_allow_html=True)
         if st.button("Connect Google Account", use_container_width=True):
             try:
-                google_auth.get_google_credentials()
-                st.success("Google connected!")
-                st.rerun()
+                # interactive=True opens the desktop OAuth consent. This only
+                # works when running locally (it needs a browser + loopback).
+                # When hosted, provide the token via the GOOGLE_TOKEN_JSON
+                # secret instead (see DEPLOYMENT.md / run authorize.py once).
+                creds = google_auth.get_google_credentials(interactive=True)
+                if creds:
+                    st.success("Google connected!")
+                    st.rerun()
+                else:
+                    st.error("Could not connect. When hosted, set the GOOGLE_TOKEN_JSON secret (run `python authorize.py` locally once to generate it).")
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"Error: {e}. If this app is hosted, add the GOOGLE_TOKEN_JSON secret instead of using this button.")
                 
     st.markdown("---")
     
@@ -302,7 +328,7 @@ with st.sidebar:
         st.markdown("<span class='status-badge status-disconnected'>NOT CONNECTED</span>", unsafe_allow_html=True)
         client_id, _ = sync_strava.get_credentials()
         if client_id and client_id != "your_strava_client_id_here" and client_id != "":
-            redirect_uri = "http://localhost:8501/"
+            redirect_uri = get_app_url()
             strava_auth_url = f"https://www.strava.com/oauth/authorize?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&scope=activity:read_all"
             st.markdown(f'<a href="{strava_auth_url}" target="_self"><button style="width:100%; border:none; padding:10px; background-color:#fc5200; color:white; border-radius:8px; font-weight:600; cursor:pointer;">Authorize Strava</button></a>', unsafe_allow_html=True)
         else:
