@@ -1,0 +1,36 @@
+import { useState } from "react";
+
+import Coach from "./pages/Coach";
+import Dashboard from "./pages/Dashboard";
+import Log from "./pages/Log";
+
+const TABS = ["Dashboard", "Log", "Coach"] as const;
+type Tab = (typeof TABS)[number];
+
+export default function App() {
+  const [tab, setTab] = useState<Tab>("Dashboard");
+
+  return (
+    <div className="app">
+      <header>
+        <h1>Aura</h1>
+        <nav>
+          {TABS.map((name) => (
+            <button
+              key={name}
+              className={name === tab ? "active" : ""}
+              onClick={() => setTab(name)}
+            >
+              {name}
+            </button>
+          ))}
+        </nav>
+      </header>
+      <main>
+        {tab === "Dashboard" && <Dashboard />}
+        {tab === "Log" && <Log />}
+        {tab === "Coach" && <Coach />}
+      </main>
+    </div>
+  );
+}

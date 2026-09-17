@@ -1,68 +1,116 @@
-# Fitness AI Coach & Gemini Integrator
+# Aura
 
-A premium local Python application that aggregates your fitness data from **Strava**, **Google Fit** (syncing your Da Fit watch steps and sleep), and **FitNotes** (syncing your strength workout backups from Google Drive), creating a unified dashboard and a specialized **Gemini AI Coach Chat** to query your training data.
+A personal training data warehouse with a coaching agent on top. Single user,
+local-first: everything runs on your machine and nothing leaves it except the
+calls you make to Strava, Google Drive and the Claude API.
 
----
+The design principle is that **the database is the product**. Ingestion adapters,
+the metrics layer, the web UI and the coach are all clients of one canonical
+schema.
 
-## Prerequisites
+## Architecture
 
-Make sure you have Python 3.8+ installed on your system.
-
----
-
-## Step 1: Install Dependencies
-
-Open a command prompt or terminal in this folder and run:
-```bash
-pip install -r requirements.txt
+```
+  Strava ──┐
+           ├─► adapters ─► raw_records ─► canonical tables ─► SQL views ─┐
+Health ────┘   (fetch,     (append-only)   (SI units)       (e1RM, ACWR, │
+Connect        normalise,                                    volume)     │
+  export       upsert)                                                   │
+                                                                         ▼
+  Log UI ──────────────────────────────────────────────────►  coach agent
+                                                              (tool calls)
 ```
 
----
+**1. Raw store.** Every adapter writes the upstream payload to `raw_records`
+before normalising it. Nothing deletes from that table, so the canonical tables
+can be rebuilt from it without re-contacting an API.
 
-## Step 2: Acquire API Credentials
+**2. Canonical model.** Source-agnostic tables in SI units — kilograms, metres,
+seconds. No row carries its own unit; conversion happens at the display edge.
+`daily_metrics` is long-form `(date, metric, source, value)`, so adding HRV or
+SpO2 later is an insert rather than a migration.
 
-### 1. Google Gemini API
-- Go to [Google AI Studio](https://aistudio.google.com/).
-- Click **Get API Key** and generate a new key.
-- Paste this key into the `.env` file under `GEMINI_API_KEY`.
+**3. Derived metrics.** SQL views compute estimated 1RM (Epley, guarded to 1–12
+reps), volume and working sets per muscle group, and training load with acute
+(7-day) and chronic (28-day) averages plus their ratio. Rest days come from a
+generated date spine, so a zero is a real zero.
 
-### 2. Strava API
-- Go to [Strava API Settings](https://www.strava.com/settings/api).
-- Create an app (fill in details, set **Authorization Callback Domain** to `localhost:8501`).
-- Copy the **Client ID** and **Client Secret** into the `.env` file under `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET`.
+**4. Coach agent.** Claude with a typed tool surface over those views. The model
+never does arithmetic — every figure it quotes comes from a tool call. It can
+also write: `log_set` records a set from chat, and `remember` persists durable
+facts (injuries, goals, constraints) that load into every later conversation.
 
-### 3. Google API (Google Drive & Google Fit)
-- Go to the [Google Cloud Console](https://console.cloud.google.com/).
-- Create a new project.
-- Search for and enable the **Google Drive API** and the **Fitness API**.
-- Go to the **OAuth consent screen** tab:
-  - Select **User Type: External**.
-  - Add your own email as a developer/test user.
-  - Under Scopes, add the following scopes:
-    - `https://www.googleapis.com/auth/drive.readonly` (To read your FitNotes backups)
-    - `https://www.googleapis.com/auth/fitness.activity.read` (To read Google Fit steps/activities)
-    - `https://www.googleapis.com/auth/fitness.sleep.read` (To read Google Fit sleep details)
-- Go to the **Credentials** tab:
-  - Click **Create Credentials** -> **OAuth client ID**.
-  - Select Application type: **Desktop app**.
-  - Name it "Fitness Coach App".
-  - Click Create.
-  - Download the JSON file and save it in the project root directory as **`credentials.json`**.
+## Setup
 
----
-
-## Step 3: Configure FitNotes & Da Fit on Your Phone
-
-- **Da Fit Sync**: In your phone's Da Fit app settings, go to Profile -> third-party apps, select **Google Fit**, and authorize sync to your Google Account.
-- **FitNotes Sync**: In the FitNotes settings on your phone, go to **Settings -> Backup -> Cloud**, click **Google Drive**, and upload a backup (`FitNotes_Backup.fitnotes`). Alternatively, enable **Automatic Backup** to Google Drive.
-
----
-
-## Step 4: Run the Application
-
-Start the local Streamlit dashboard:
 ```bash
-streamlit run app.py
+docker compose up -d                 # Postgres on 127.0.0.1:5432
+cp .env.example .env                 # then fill in ANTHROPIC_API_KEY
+
+cd api
+uv sync
+uv run alembic upgrade head
+uv run python -m app.seed            # ~35 exercises with muscle mappings
+uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+
+cd ../web
+npm install
+npm run dev                          # http://127.0.0.1:5173
 ```
 
-Click the OAuth authentication links in the sidebar to authorize Strava and Google. Once authorized, click **Sync All Data** to populate the charts and start chatting with your Gemini Coach!
+## Data sources
+
+**Strength** is first-party — you log it in the app, so there is no import step.
+
+**Strava** connects at `/api/sync/strava/authorize`, then `POST /api/sync/strava`
+pulls activities incrementally from the newest one already stored.
+
+**Watch data (Da Fit and anything else on your phone)** arrives through Health
+Connect. Google Fit's REST API is not an option for a new build: developer
+signups closed in May 2024 and the APIs shut down at the end of 2026, with
+[no replacement for the REST API][fit-faq]. Health Connect is on-device and has
+no cloud API either — but it can export on a schedule, which is the way in:
+
+1. On your phone, make sure Da Fit syncs to Health Connect. (It definitely
+   supports Google Fit; Health Connect support varies by version. If it does not,
+   Health Sync is the usual bridge app.)
+2. Android Settings → Health Connect → Backup and restore → schedule an export to
+   Google Drive.
+3. Put a desktop OAuth client JSON at `credentials.json`, then
+   `POST /api/sync/health-connect`. The adapter finds the newest export, skips it
+   if the archive is unchanged, and unpacks the SQLite database inside.
+
+The export's internal schema is Health Connect's own and shifts between Android
+versions, so extraction is schema-discovering: `app/adapters/health_connect.py`
+holds candidate table and column names, and `inspect_export()` reports what a
+real export actually contains so the mapping can be checked against it.
+
+[fit-faq]: https://developer.android.com/health-and-fitness/health-connect/migration/fit/faq
+
+## Layout
+
+```
+api/
+  app/
+    models.py          canonical schema
+    queries.py         shared SQL row helpers
+    adapters/          strava, health_connect, shared run bookkeeping
+    agent/             tool definitions + the coaching loop
+    routers/           training, metrics, coach (SSE), sync
+  alembic/versions/    0001 tables, 0002 metrics views
+web/
+  src/pages/           Dashboard, Log, Coach
+```
+
+## Status
+
+Working: schema and migrations, metrics views, exercise catalogue, strength
+logging (API and UI), the agent tool surface, Strava and Health Connect adapters,
+the dashboard and chat UI.
+
+Not built yet: charts on a Trends page, the scheduled background sync, and a
+one-time FitNotes importer to backfill existing history.
+
+## Legacy
+
+The flat `*.py` scripts and `.bat`/`.ps1` files in the repository root are the
+previous Streamlit version, kept for reference until the rebuild replaces them.

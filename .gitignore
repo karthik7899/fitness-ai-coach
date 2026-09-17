@@ -9,9 +9,16 @@ sync_history.log
 __pycache__/
 *.pyc
 .pytest_cache/
+.ruff_cache/
 venv/
 env/
 .env/
+.venv/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
 
 # System Files
 .DS_Store
