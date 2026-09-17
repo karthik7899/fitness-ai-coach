@@ -14,8 +14,8 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://aura:aura@127.0.0.1:5432/aura"
 
-    anthropic_api_key: str = ""
-    anthropic_model: str = "claude-opus-5"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-3.8-flash"
 
     strava_client_id: str = ""
     strava_client_secret: str = ""

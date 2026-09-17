@@ -1,19 +1,20 @@
-"""The coaching agent loop.
+"""The coaching agent loop, on the Gemini API.
 
-This is a manual loop rather than the SDK tool runner because each turn has to do
-three things the runner does not expose together: emit SSE events per tool call,
-persist every content block to `chat_messages`, and hand each handler the request's
-SQLAlchemy session.
+Function calling is driven manually rather than through the SDK's automatic mode,
+because each turn has to emit SSE events per tool call, persist every content part
+to `chat_messages`, and hand each handler the request's SQLAlchemy session.
+
+`tools.py` stays provider-neutral; the conversion to Gemini declarations lives here.
 """
 
 from __future__ import annotations
 
 import asyncio
 import datetime as dt
-import json
 from collections.abc import AsyncIterator
 
-import anthropic
+from google import genai
+from google.genai import types
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -22,7 +23,6 @@ from app.config import settings
 from app.models import ChatMessage, CoachNote, Conversation
 
 MAX_TURNS = 12
-MAX_TOKENS = 16000
 
 SYSTEM_INSTRUCTIONS = """\
 You are the athlete's personal strength and conditioning coach. You have direct \
@@ -51,50 +51,92 @@ intention.
 """
 
 
-def _client() -> anthropic.AsyncAnthropic:
-    # An unset key does not mean there are no credentials: with no api_key the SDK
-    # falls back to ANTHROPIC_AUTH_TOKEN or an `ant auth login` profile on disk.
-    if settings.anthropic_api_key:
-        return anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    return anthropic.AsyncAnthropic()
+def _client() -> genai.Client:
+    # An unset setting does not mean no credentials: the bare constructor picks up
+    # GEMINI_API_KEY or GOOGLE_API_KEY from the environment.
+    if settings.gemini_api_key:
+        return genai.Client(api_key=settings.gemini_api_key)
+    return genai.Client()
 
 
-def _system_blocks(session: Session) -> list[dict]:
+def declarations() -> list[types.FunctionDeclaration]:
+    return [
+        types.FunctionDeclaration(
+            name=spec["name"],
+            description=spec["description"],
+            parameters_json_schema=spec["parameters"],
+        )
+        for spec in TOOL_SPECS
+    ]
+
+
+def _system_instruction(session: Session) -> str:
     notes = session.scalars(
         select(CoachNote).where(CoachNote.is_active.is_(True)).order_by(CoachNote.kind)
     ).all()
 
-    context = [f"Today is {dt.date.today().isoformat()}."]
+    context = [SYSTEM_INSTRUCTIONS, f"\nToday is {dt.date.today().isoformat()}."]
     if notes:
         context.append("\nStanding facts about this athlete:")
         context.extend(f"- ({n.kind}) {n.content}" for n in notes)
     else:
         context.append("\nNo standing facts recorded for this athlete yet.")
-
-    # The instructions are the stable cache prefix; date and notes change, so they
-    # sit after the breakpoint.
-    return [
-        {
-            "type": "text",
-            "text": SYSTEM_INSTRUCTIONS,
-            "cache_control": {"type": "ephemeral"},
-        },
-        {"type": "text", "text": "\n".join(context)},
-    ]
+    return "\n".join(context)
 
 
-def _load_history(session: Session, conversation_id: int) -> list[dict]:
+def _load_history(session: Session, conversation_id: int) -> list[types.Content]:
     rows = session.scalars(
         select(ChatMessage)
         .where(ChatMessage.conversation_id == conversation_id)
         .order_by(ChatMessage.id)
     ).all()
-    return [{"role": r.role, "content": r.content} for r in rows]
+    return [
+        types.Content(
+            role=row.role,
+            parts=[types.Part.model_validate(part) for part in row.content],
+        )
+        for row in rows
+    ]
 
 
-def _persist(session: Session, conversation_id: int, role: str, content) -> None:
-    session.add(ChatMessage(conversation_id=conversation_id, role=role, content=content))
+def _persist(session: Session, conversation_id: int, content: types.Content) -> None:
+    session.add(
+        ChatMessage(
+            conversation_id=conversation_id,
+            role=content.role or "user",
+            content=[p.model_dump(mode="json", exclude_none=True) for p in content.parts or []],
+        )
+    )
     session.commit()
+
+
+def merge_stream_parts(parts: list[types.Part]) -> list[types.Part]:
+    """Collapse the streamed text fragments back into whole parts.
+
+    Streaming splits a reply across many small text parts. Function calls and any
+    part carrying a thought signature pass through untouched — Gemini needs those
+    echoed back verbatim on the next turn or it loses its reasoning context.
+    """
+    merged: list[types.Part] = []
+    for part in parts:
+        plain_text = (
+            part.text is not None
+            and not part.thought
+            and part.function_call is None
+            and part.thought_signature is None
+        )
+        if plain_text and merged:
+            previous = merged[-1]
+            if (
+                previous.text is not None
+                and not previous.thought
+                and previous.function_call is None
+                and previous.thought_signature is None
+            ):
+                merged[-1] = types.Part(text=(previous.text or "") + part.text)
+                continue
+        merged.append(part)
+    return merged
 
 
 def ensure_conversation(session: Session, conversation_id: int | None) -> Conversation:
@@ -108,16 +150,15 @@ def ensure_conversation(session: Session, conversation_id: int | None) -> Conver
     return conversation
 
 
-async def _run_tool(session: Session, name: str, args: dict) -> tuple[str, bool]:
+async def _run_tool(session: Session, name: str, args: dict) -> dict:
     handler = HANDLERS.get(name)
     if handler is None:
-        return f"Error: no such tool {name!r}.", True
+        return {"error": f"No such tool {name!r}."}
     try:
-        result = await asyncio.to_thread(handler, session, **args)
-        return json.dumps(result, default=str), False
+        return await asyncio.to_thread(handler, session, **args)
     except Exception as exc:  # surfaced to the model so it can correct itself
         await asyncio.to_thread(session.rollback)
-        return f"Error running {name}: {exc}", True
+        return {"error": f"{type(exc).__name__}: {exc}"}
 
 
 async def stream_turn(
@@ -126,60 +167,71 @@ async def stream_turn(
     """Run one user turn to completion, yielding SSE payloads as it goes."""
     client = _client()
 
-    messages = _load_history(session, conversation.id)
-    messages.append({"role": "user", "content": user_text})
-    _persist(session, conversation.id, "user", user_text)
+    contents = _load_history(session, conversation.id)
+    user_turn = types.Content(role="user", parts=[types.Part(text=user_text)])
+    contents.append(user_turn)
+    _persist(session, conversation.id, user_turn)
 
     yield {"type": "start", "conversation_id": conversation.id}
 
-    system = _system_blocks(session)
+    config = types.GenerateContentConfig(
+        system_instruction=_system_instruction(session),
+        tools=[types.Tool(function_declarations=declarations())],
+        # Manual: the SDK would otherwise call the handlers itself, with no session.
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+    )
 
     for _ in range(MAX_TURNS):
-        async with client.beta.messages.stream(
-            model=settings.anthropic_model,
-            max_tokens=MAX_TOKENS,
-            system=system,
-            thinking={"type": "adaptive"},
-            tools=TOOL_SPECS,
-            messages=messages,
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-        ) as stream:
-            async for event in stream:
-                if event.type == "content_block_delta" and event.delta.type == "text_delta":
-                    yield {"type": "token", "text": event.delta.text}
-            final = await stream.get_final_message()
+        streamed: list[types.Part] = []
 
-        content = [block.model_dump(mode="json") for block in final.content]
-        messages.append({"role": "assistant", "content": content})
-        _persist(session, conversation.id, "assistant", content)
+        stream = await client.aio.models.generate_content_stream(
+            model=settings.gemini_model, contents=contents, config=config
+        )
+        async for chunk in stream:
+            if not chunk.candidates:
+                continue
+            candidate = chunk.candidates[0]
+            for part in candidate.content.parts if candidate.content else []:
+                if part.text and not part.thought:
+                    yield {"type": "token", "text": part.text}
+                streamed.append(part)
 
-        if final.stop_reason == "refusal":
-            yield {"type": "error", "message": "The model declined to answer that."}
+        parts = merge_stream_parts(streamed)
+        if not parts:
+            yield {"type": "error", "message": "The model returned an empty response."}
             return
 
-        if final.stop_reason != "tool_use":
+        model_turn = types.Content(role="model", parts=parts)
+        contents.append(model_turn)
+        _persist(session, conversation.id, model_turn)
+
+        calls = [p.function_call for p in parts if p.function_call is not None]
+        if not calls:
             break
 
-        tool_results = []
-        for block in final.content:
-            if block.type != "tool_use":
-                continue
-            yield {"type": "tool", "name": block.name, "input": block.input}
-            payload, is_error = await _run_tool(session, block.name, dict(block.input))
-            result_block = {
-                "type": "tool_result",
-                "tool_use_id": block.id,
-                "content": payload,
-            }
-            if is_error:
-                result_block["is_error"] = True
-            tool_results.append(result_block)
+        response_parts: list[types.Part] = []
+        for call in calls:
+            name = call.name or ""
+            args = dict(call.args or {})
+            yield {"type": "tool", "name": name, "input": args}
+            result = await _run_tool(session, name, args)
+            response_parts.append(
+                types.Part.from_function_response(name=name, response=result)
+            )
 
-        messages.append({"role": "user", "content": tool_results})
-        _persist(session, conversation.id, "user", tool_results)
+        # Function responses go back on the user turn; Gemini roles are user/model only.
+        tool_turn = types.Content(role="user", parts=response_parts)
+        contents.append(tool_turn)
+        _persist(session, conversation.id, tool_turn)
     else:
         yield {"type": "error", "message": f"Stopped after {MAX_TURNS} tool rounds."}
         return
 
     yield {"type": "done"}
+
+
+if __name__ == "__main__":
+    # `uv run python -m app.agent.coach` — which models this key can actually call.
+    for model in _client().models.list():
+        if "generateContent" in (model.supported_actions or []):
+            print(f"{model.name}\t{model.display_name}")

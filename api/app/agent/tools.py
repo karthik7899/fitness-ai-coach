@@ -259,7 +259,7 @@ TOOL_SPECS: list[dict] = [
             "hrv_ms, active_minutes, body_weight_kg. Use for questions about sleep, "
             "recovery, step load, or bodyweight trends."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "start_date": _DATE,
@@ -290,7 +290,7 @@ TOOL_SPECS: list[dict] = [
             "ratio (ACWR). Use for readiness, overreaching, tapering, and 'am I doing "
             "too much' questions."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {"start_date": _DATE, "end_date": _DATE},
             "required": ["start_date", "end_date"],
@@ -302,7 +302,7 @@ TOOL_SPECS: list[dict] = [
             "Per-session history for one lift: best estimated 1RM, top weight, volume "
             "and working sets by date. Use for strength progression questions."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "exercise": {"type": "string", "description": "Exercise name, e.g. 'Back Squat'."},
@@ -317,7 +317,7 @@ TOOL_SPECS: list[dict] = [
             "Aggregated training volume and working sets over a range, grouped by muscle, "
             "exercise, week or day. Use for balance, weak-point and weekly-tonnage questions."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "start_date": _DATE,
@@ -333,7 +333,7 @@ TOOL_SPECS: list[dict] = [
             "Cardio activities from Strava with distance, moving time, heart rate and "
             "computed pace in min/km. Use for running, cycling and pacing questions."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "limit": {"type": "integer"},
@@ -345,7 +345,7 @@ TOOL_SPECS: list[dict] = [
     {
         "name": "get_workout",
         "description": "Every set performed on one date, with volume and estimated 1RM.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {"performed_on": _DATE},
             "required": ["performed_on"],
@@ -357,7 +357,7 @@ TOOL_SPECS: list[dict] = [
             "The exercise catalogue, optionally filtered. Use to resolve a name before "
             "logging a set, or to check what the athlete actually trains."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {"search": {"type": "string"}},
         },
@@ -369,7 +369,7 @@ TOOL_SPECS: list[dict] = [
             "they do not exist. Weight is kilograms. Only call this when the athlete "
             "states they actually performed the set."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "exercise": {"type": "string"},
@@ -389,7 +389,7 @@ TOOL_SPECS: list[dict] = [
             "an injury, a goal, a schedule constraint, a training block, or a preference. "
             "These are loaded into every future conversation."
         ),
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "kind": {

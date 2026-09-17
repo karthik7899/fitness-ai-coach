@@ -35,16 +35,25 @@ reps), volume and working sets per muscle group, and training load with acute
 (7-day) and chronic (28-day) averages plus their ratio. Rest days come from a
 generated date spine, so a zero is a real zero.
 
-**4. Coach agent.** Claude with a typed tool surface over those views. The model
+**4. Coach agent.** Gemini with a typed tool surface over those views. The model
 never does arithmetic — every figure it quotes comes from a tool call. It can
 also write: `log_set` records a set from chat, and `remember` persists durable
 facts (injuries, goals, constraints) that load into every later conversation.
+
+The tool specs in `agent/tools.py` are plain JSON Schema and carry no provider
+types; only `agent/coach.py` knows about Gemini, so swapping providers is one
+file. Get a free key at [aistudio.google.com/apikey][key] — but note that on the
+free tier Google may use prompts and responses to improve its products, including
+human review. This app's prompts carry your training history, sleep and injuries;
+a paid key excludes that data from training.
+
+[key]: https://aistudio.google.com/apikey
 
 ## Setup
 
 ```bash
 docker compose up -d                 # Postgres on 127.0.0.1:5432
-cp .env.example .env                 # then fill in ANTHROPIC_API_KEY
+cp .env.example .env                 # then fill in GEMINI_API_KEY
 
 cd api
 uv sync
@@ -140,8 +149,12 @@ Working end to end: schema and migrations, metrics views, exercise catalogue,
 strength logging, FitNotes import, the agent tool surface, Strava and Health
 Connect adapters, scheduled sync, and the Dashboard / Log / Trends / Coach UI.
 
-Unverified: the agent loop itself needs a live `ANTHROPIC_API_KEY`. Everything it
-reads is tested; the request path is not.
+Unverified: the request path to Gemini needs a live `GEMINI_API_KEY`. Everything
+it reads is tested, and the tool-schema conversion, stream-part merging and
+history round-trip are covered by `tests/test_agent.py`; the network call is not.
+
+`uv run python -m app.agent.coach` lists the models your key can actually call,
+if `GEMINI_MODEL` ever needs updating.
 
 ## Legacy
 

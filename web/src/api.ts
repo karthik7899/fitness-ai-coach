@@ -128,11 +128,11 @@ export async function streamChat(
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
 
-    // SSE frames are separated by a blank line.
-    const frames = buffer.split("\n\n");
+    // SSE frames end on a blank line. The server emits CRLF, so match both.
+    const frames = buffer.split(/\r?\n\r?\n/);
     buffer = frames.pop() ?? "";
     for (const frame of frames) {
-      for (const line of frame.split("\n")) {
+      for (const line of frame.split(/\r?\n/)) {
         if (!line.startsWith("data:")) continue;
         try {
           onEvent(JSON.parse(line.slice(5).trim()) as CoachEvent);
