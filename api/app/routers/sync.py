@@ -5,30 +5,28 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.adapters import fitnotes, health_connect, strava
+from app.adapters import fitnotes, health_connect, inbox, strava
+from app.config import settings
 from app.db import get_session
 from app.models import SyncRun
-from app.scheduler import sync_all
+from app.scheduler import ADAPTERS, sync_all
 
 router = APIRouter(prefix="/api/sync", tags=["sync"])
 
 
 @router.get("/status")
 def status(session: Session = Depends(get_session)):
+    """Driven by the scheduler's adapter registry, so it cannot drift from what runs."""
     latest = {}
-    for source in (strava.SOURCE, health_connect.SOURCE):
+    for adapter in ADAPTERS:
         run = session.scalar(
             select(SyncRun)
-            .where(SyncRun.source == source)
+            .where(SyncRun.source == adapter.source)
             .order_by(SyncRun.started_at.desc())
             .limit(1)
         )
-        latest[source] = {
-            "connected": (
-                strava.is_connected(session)
-                if source == strava.SOURCE
-                else health_connect.is_connected(session)
-            ),
+        latest[adapter.source] = {
+            "connected": adapter.is_connected(session),
             "last_run": None
             if run is None
             else {
@@ -40,6 +38,19 @@ def status(session: Session = Depends(get_session)):
             },
         }
     return latest
+
+
+@router.post("/inbox")
+def run_inbox(session: Session = Depends(get_session)):
+    """Import anything waiting in the local inbox directory."""
+    results = inbox.scan(session)
+    return {
+        "directory": str(settings.inbox_path),
+        "files": [
+            {"name": r.path.name, "kind": r.kind, "written": r.written, "error": r.error}
+            for r in results
+        ],
+    }
 
 
 @router.post("/all")

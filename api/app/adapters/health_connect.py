@@ -4,8 +4,10 @@ Health Connect is on-device and has no cloud API, and the Google Fit REST API it
 replaced is closed to new developers and shuts down at the end of 2026. The route
 that needs no Android app: Android Settings -> Health Connect -> Backup and
 restore -> schedule an export to Google Drive. That drops a ZIP containing a
-SQLite database, which this adapter polls, unpacks and normalises. Watch data
-(Da Fit and anything else writing to Health Connect) arrives the same way.
+SQLite database, which this adapter polls, unpacks and normalises.
+
+Optional. For watch data with no Google account in the path, use Gadgetbridge and
+the inbox instead; the same ZIP can also simply be dropped in the inbox.
 
 The export's internal schema is Health Connect's own and shifts between Android
 versions, so extraction is schema-discovering: table and column names below are
@@ -174,7 +176,7 @@ def download_latest_export(session: Session) -> tuple[str, bytes] | None:
     return newest["name"], buffer.getvalue()
 
 
-def _unpack(archive: bytes) -> Path:
+def unpack_export(archive: bytes) -> Path:
     with zipfile.ZipFile(io.BytesIO(archive)) as zf:
         db_names = [n for n in zf.namelist() if n.endswith(".db")]
         if not db_names:
@@ -290,7 +292,7 @@ def extract_daily(db_path: Path) -> dict[tuple[dt.date, str], tuple[float, str]]
     return result
 
 
-def _upsert_metrics(session: Session, daily: dict[tuple[dt.date, str], tuple[float, str]]) -> int:
+def upsert_daily(session: Session, daily: dict[tuple[dt.date, str], tuple[float, str]]) -> int:
     written = 0
     for (day, metric), (value, unit) in daily.items():
         stmt = (
@@ -331,9 +333,9 @@ def sync(session: Session) -> SyncOutcome:
             session.commit()
             return outcome
 
-        db_path = _unpack(archive)
+        db_path = unpack_export(archive)
         daily = extract_daily(db_path)
         outcome.read = len(daily)
-        outcome.written = _upsert_metrics(session, daily)
+        outcome.written = upsert_daily(session, daily)
         session.commit()
         return outcome

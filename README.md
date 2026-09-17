@@ -85,26 +85,41 @@ columns if you want to check the mapping first.
 **Strava** connects at `/api/sync/strava/authorize`, then `POST /api/sync/strava`
 pulls activities incrementally from the newest one already stored.
 
-**Watch data (Da Fit and anything else on your phone)** arrives through Health
-Connect. Google Fit's REST API is not an option for a new build: developer
-signups closed in May 2024 and the APIs shut down at the end of 2026, with
-[no replacement for the REST API][fit-faq]. Health Connect is on-device and has
-no cloud API either — but it can export on a schedule, which is the way in:
+**The inbox** is the simplest path, and involves no cloud account at all. Drop a
+file into `data/inbox/` and the scheduler imports it within two minutes:
 
-1. On your phone, make sure Da Fit syncs to Health Connect. (It definitely
-   supports Google Fit; Health Connect support varies by version. If it does not,
-   Health Sync is the usual bridge app.)
-2. Android Settings → Health Connect → Backup and restore → schedule an export to
-   Google Drive.
-3. Put a desktop OAuth client JSON at `credentials.json`, then
-   `POST /api/sync/health-connect`. The adapter finds the newest export, skips it
-   if the archive is unchanged, and unpacks the SQLite database inside.
+| File | Becomes |
+| :--- | :--- |
+| FitNotes `.fitnotes` backup | strength history |
+| FitNotes CSV export | strength history |
+| Gadgetbridge export (`.db`) | steps, resting HR, sleep |
+| Health Connect export (`.zip`) | steps, sleep, HR, HRV, bodyweight |
 
-The export's internal schema is Health Connect's own and shifts between Android
-versions, so extraction is schema-discovering: `app/adapters/health_connect.py`
-holds candidate table and column names, and `inspect_export()` reports what a
-real export actually contains so the mapping can be checked against it.
+Files are identified by probing their contents, not their extension, imported
+once (keyed on the file's hash, so re-dropping a backup is a no-op), then moved
+to `processed/`. Anything unrecognised goes to `rejected/` rather than being
+retried forever. Sync the folder from your phone with Syncthing, or copy it over
+USB — the app only ever reads a local directory.
 
+**Watch data without Google.** The Da Fit app has no export at all, so the way to
+get your watch data out is to stop using it. [Gadgetbridge][gb] speaks the
+Moyoung/CRRepa protocol these watches use, talks to the watch directly over
+Bluetooth, and needs no account: pair the watch there, then Data Export and drop
+the `.db` in the inbox. Nothing touches Moyoung's servers or Google's.
+
+Gadgetbridge stores samples in per-device tables whose shape depends on what you
+have paired, so extraction is schema-discovering. Sleep is deliberately
+conservative — Gadgetbridge keeps a device-specific raw kind and normalises it
+only on read, so sleep is emitted only where the export carries an explicitly
+typed sleep column. `inspect_export()` reports what a real export contains.
+
+**Health Connect** stays supported for anyone who wants it. Google Fit's REST API
+is not an option for a new build — signups closed in May 2024 and the APIs shut
+down at the end of 2026, with [no replacement][fit-faq] — but Health Connect can
+export on a schedule to Google Drive, and `POST /api/sync/health-connect` polls
+for it. Or drop that ZIP in the inbox and skip the OAuth entirely.
+
+[gb]: https://gadgetbridge.org/gadgets/wearables/moyoung/
 [fit-faq]: https://developer.android.com/health-and-fitness/health-connect/migration/fit/faq
 
 ## Layout

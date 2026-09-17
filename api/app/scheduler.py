@@ -9,21 +9,31 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy.orm import Session
 
-from app.adapters import health_connect, strava
+from app.adapters import health_connect, inbox, strava
 from app.config import settings
 from app.db import SessionLocal
 
 log = logging.getLogger(__name__)
 
-Adapter = tuple[str, Callable[[Session], bool], Callable[[Session], object]]
+@dataclass(frozen=True)
+class Adapter:
+    source: str
+    is_connected: Callable[[Session], bool]
+    sync: Callable[[Session], object]
+    # None means the shared remote-sync interval; the inbox polls a local
+    # directory, so it can run often enough that a dropped file lands quickly.
+    every_minutes: int | None = None
+
 
 ADAPTERS: list[Adapter] = [
-    (strava.SOURCE, strava.is_connected, strava.sync),
-    (health_connect.SOURCE, health_connect.is_connected, health_connect.sync),
+    Adapter(inbox.SOURCE, inbox.is_connected, inbox.sync, every_minutes=2),
+    Adapter(strava.SOURCE, strava.is_connected, strava.sync),
+    Adapter(health_connect.SOURCE, health_connect.is_connected, health_connect.sync),
 ]
 
 
@@ -43,22 +53,23 @@ def run_adapter(source: str, is_connected: Callable, sync: Callable) -> None:
 
 
 def sync_all() -> None:
-    for source, is_connected, sync in ADAPTERS:
-        run_adapter(source, is_connected, sync)
+    for adapter in ADAPTERS:
+        run_adapter(adapter.source, adapter.is_connected, adapter.sync)
 
 
 def create_scheduler() -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone="UTC")
-    for source, is_connected, sync in ADAPTERS:
+    for adapter in ADAPTERS:
+        minutes = adapter.every_minutes or settings.sync_interval_minutes
         scheduler.add_job(
             run_adapter,
             trigger="interval",
-            minutes=settings.sync_interval_minutes,
-            args=[source, is_connected, sync],
-            id=f"sync_{source}",
+            minutes=minutes,
+            args=[adapter.source, adapter.is_connected, adapter.sync],
+            id=f"sync_{adapter.source}",
             # Overlapping runs would double-fetch; a missed run just waits for the next.
             max_instances=1,
             coalesce=True,
-            jitter=60,
+            jitter=min(60, minutes * 30),
         )
     return scheduler

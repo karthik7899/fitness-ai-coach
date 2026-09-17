@@ -20,6 +20,9 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Dropped backups and exports — personal health data, never committed
+data/
+
 # System Files
 .DS_Store
 Thumbs.db

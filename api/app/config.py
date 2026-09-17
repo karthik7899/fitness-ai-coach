@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     unit_system: str = "metric"
     sync_interval_minutes: int = 60
 
+    # Drop FitNotes backups and Gadgetbridge exports here; the scheduler imports them.
+    inbox_dir: str = "data/inbox"
+
+    @property
+    def inbox_path(self) -> Path:
+        return REPO_ROOT / self.inbox_dir
+
     @property
     def google_credentials_path(self) -> Path:
         return REPO_ROOT / self.google_credentials_file
