@@ -1,9 +1,31 @@
+import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import coach, metrics, sync, training
+from app.scheduler import create_scheduler
 
-app = FastAPI(title="Aura", description="Personal training data warehouse and coach")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    scheduler = create_scheduler()
+    scheduler.start()
+    try:
+        yield
+    finally:
+        scheduler.shutdown(wait=False)
+
+
+app = FastAPI(
+    title="Aura",
+    description="Personal training data warehouse and coach",
+    lifespan=lifespan,
+)
 
 # The Vite dev server is the only browser origin; everything runs on loopback.
 app.add_middleware(

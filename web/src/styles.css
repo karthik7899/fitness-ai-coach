@@ -6,6 +6,18 @@
   --muted: #8b93a3;
   --accent: #5b9cff;
   --error: #ff6b6b;
+
+  /* Chart tokens. Series steps are the validated dark-surface palette;
+     chrome is one step off the panel so it stays recessive. */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --viz-grid: #232834;
+  --viz-axis: #313846;
+  --viz-band: rgba(255, 255, 255, 0.035);
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
   color-scheme: dark;
 }
 
@@ -97,9 +109,10 @@ nav button.active {
   color: var(--muted);
 }
 
+/* Proportional figures: tabular-nums is for columns that align vertically
+   (table rows, axis ticks), not for a large standalone value. */
 .tile .value {
   font-size: 22px;
-  font-variant-numeric: tabular-nums;
 }
 
 table {
@@ -219,4 +232,169 @@ button.link {
   border-radius: 99px;
   padding: 2px 8px;
   font-family: ui-monospace, monospace;
+}
+
+/* ---------- charts ---------- */
+
+.chart {
+  width: 100%;
+}
+
+.chart-plot {
+  position: relative;
+}
+
+.viz-grid {
+  stroke: var(--viz-grid);
+  stroke-width: 1;
+}
+
+.viz-axis {
+  stroke: var(--viz-axis);
+  stroke-width: 1;
+}
+
+.viz-band {
+  fill: var(--viz-band);
+}
+
+.viz-crosshair {
+  stroke: var(--viz-axis);
+  stroke-width: 1;
+}
+
+/* Text always wears an ink token, never the series colour. */
+.viz-axis-text {
+  fill: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.viz-end-label {
+  fill: var(--text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 2px surface ring keeps markers legible where they cross a line. */
+.viz-ring {
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+
+.viz-bar path {
+  transition: opacity 0.12s ease;
+}
+
+.viz-bar.hovered path {
+  opacity: 0.82;
+}
+
+.legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  min-width: 132px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.tooltip-date {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.tooltip-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* Value leads, series name follows. */
+.tooltip-value {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltip-name {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 99px;
+  font-size: 13px;
+}
+
+.chip.active {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.section-head h2 {
+  margin: 0;
+}
+
+/* Status always ships icon + label, never colour alone. */
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.state-icon {
+  flex: none;
+}
+
+.state-good { color: var(--status-good); }
+.state-warning { color: var(--status-warning); }
+.state-serious { color: var(--status-serious); }
+.state-critical { color: var(--status-critical); }
+.state-muted { color: var(--muted); }
+
+/* Refetch keeps the frame: hold the previous render, no skeleton, no jump. */
+.reloading {
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
 }

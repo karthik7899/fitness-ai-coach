@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     google_credentials_file: str = "credentials.json"
 
     unit_system: str = "metric"
+    sync_interval_minutes: int = 60
 
     @property
     def google_credentials_path(self) -> Path:

@@ -60,6 +60,18 @@ npm run dev                          # http://127.0.0.1:5173
 ## Data sources
 
 **Strength** is first-party — you log it in the app, so there is no import step.
+To bring existing FitNotes history across, import the backup once:
+
+```bash
+uv run python -m app.adapters.fitnotes --inspect ~/Downloads/FitNotes_Backup.fitnotes
+uv run python -m app.adapters.fitnotes ~/Downloads/FitNotes_Backup.fitnotes
+```
+
+Both the `.fitnotes` SQLite backup and the CSV export work. Imported days land
+under `source='fitnotes_import'`, separate from anything logged in the app, and
+re-running replaces each imported day rather than duplicating it. Weights are
+normalised to kilograms on the way in — `--inspect` prints the backup's actual
+columns if you want to check the mapping first.
 
 **Strava** connects at `/api/sync/strava/authorize`, then `POST /api/sync/strava`
 pulls activities incrementally from the newest one already stored.
@@ -93,22 +105,43 @@ api/
   app/
     models.py          canonical schema
     queries.py         shared SQL row helpers
-    adapters/          strava, health_connect, shared run bookkeeping
+    scheduler.py       interval sync, started by the app lifespan
+    adapters/          strava, health_connect, fitnotes, shared run bookkeeping
     agent/             tool definitions + the coaching loop
     routers/           training, metrics, coach (SSE), sync
   alembic/versions/    0001 tables, 0002 metrics views
 web/
-  src/pages/           Dashboard, Log, Coach
+  src/charts/          LineChart, BarChart, scales and formatting
+  src/pages/           Dashboard, Log, Trends, Coach
 ```
+
+## Background sync
+
+Adapters run on an interval (`SYNC_INTERVAL_MINUTES`, default 60) from inside the
+FastAPI lifespan, so CLI commands and tests never trigger network calls. A source
+that is not connected is skipped quietly rather than recorded as a failure — an
+unconfigured adapter is not an error. `GET /api/sync/status` shows connection
+state and the last run per source; `POST /api/sync/all` runs the same work now.
+
+## Charts
+
+The Trends page carries training load (acute vs chronic), the acute:chronic
+ratio against its steady-build band, volume by muscle group, and per-exercise
+estimated 1RM. Charts are hand-rolled SVG so the mark specs hold exactly: 2px
+lines, surface-ringed end markers, hairline grids, bars capped at 24px with
+rounded data-ends, crosshair tooltips that list every series at the hovered date,
+and a table view so no value is reachable only by hovering. The two-series
+palette is validated for colour-vision deficiency against the app's own dark
+surface. One filter row scopes every chart below it.
 
 ## Status
 
-Working: schema and migrations, metrics views, exercise catalogue, strength
-logging (API and UI), the agent tool surface, Strava and Health Connect adapters,
-the dashboard and chat UI.
+Working end to end: schema and migrations, metrics views, exercise catalogue,
+strength logging, FitNotes import, the agent tool surface, Strava and Health
+Connect adapters, scheduled sync, and the Dashboard / Log / Trends / Coach UI.
 
-Not built yet: charts on a Trends page, the scheduled background sync, and a
-one-time FitNotes importer to backfill existing history.
+Unverified: the agent loop itself needs a live `ANTHROPIC_API_KEY`. Everything it
+reads is tested; the request path is not.
 
 ## Legacy
 

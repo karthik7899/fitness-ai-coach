@@ -93,17 +93,40 @@ def volume(
     }
 
 
+@router.get("/exercises")
+def exercises_with_history(session: Session = Depends(get_session)):
+    """Exercises that actually have logged sets, heaviest-trained first."""
+    return _rows(
+        session,
+        """
+        SELECT exercise, SUM(volume_kg) AS volume_kg, COUNT(DISTINCT date) AS sessions
+        FROM v_exercise_e1rm_daily
+        GROUP BY exercise
+        ORDER BY volume_kg DESC
+        """,
+    )
+
+
 @router.get("/exercise/{name}")
-def exercise_progression(name: str, session: Session = Depends(get_session)):
+def exercise_progression(
+    name: str,
+    start: dt.date | None = None,
+    end: dt.date | None = None,
+    session: Session = Depends(get_session),
+):
+    start, end = _default_range(start, end, 90)
     return _rows(
         session,
         """
         SELECT date, best_e1rm_kg, top_weight_kg, volume_kg, working_sets
         FROM v_exercise_e1rm_daily
         WHERE lower(exercise) = lower(:name)
+          AND date BETWEEN :start AND :end
         ORDER BY date
         """,
         name=name,
+        start=start,
+        end=end,
     )
 
 

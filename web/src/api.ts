@@ -41,8 +41,48 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.status === 204 ? (undefined as T) : response.json();
 }
 
+export interface LoadRow {
+  date: string;
+  strength_tonnes: number;
+  cardio_minutes: number;
+  load_au: number;
+  acute_7d: number | null;
+  chronic_28d: number | null;
+  acwr: number | null;
+}
+
+export interface MuscleRow {
+  muscle: string;
+  volume_kg: number;
+  working_sets: number;
+}
+
+export interface ExerciseRow {
+  exercise: string;
+  volume_kg: number;
+  sessions: number;
+}
+
+export interface ProgressionRow {
+  date: string;
+  best_e1rm_kg: number | null;
+  top_weight_kg: number | null;
+  volume_kg: number;
+  working_sets: number;
+}
+
+const range = (start: string, end: string) => `start=${start}&end=${end}`;
+
 export const api = {
   summary: () => request<Summary>("/metrics/summary"),
+  load: (start: string, end: string) => request<LoadRow[]>(`/metrics/load?${range(start, end)}`),
+  volume: (start: string, end: string) =>
+    request<{ by_muscle: MuscleRow[]; by_day: unknown[] }>(`/metrics/volume?${range(start, end)}`),
+  exercisesWithHistory: () => request<ExerciseRow[]>("/metrics/exercises"),
+  progression: (name: string, start: string, end: string) =>
+    request<ProgressionRow[]>(
+      `/metrics/exercise/${encodeURIComponent(name)}?${range(start, end)}`,
+    ),
   exercises: (search?: string) =>
     request<Exercise[]>(`/exercises${search ? `?search=${encodeURIComponent(search)}` : ""}`),
   workouts: (limit = 20) => request<Workout[]>(`/workouts?limit=${limit}`),
