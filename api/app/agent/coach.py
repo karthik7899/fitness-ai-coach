@@ -52,9 +52,11 @@ intention.
 
 
 def _client() -> anthropic.AsyncAnthropic:
-    if not settings.anthropic_api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY is not set; the coach cannot run.")
-    return anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    # An unset key does not mean there are no credentials: with no api_key the SDK
+    # falls back to ANTHROPIC_AUTH_TOKEN or an `ant auth login` profile on disk.
+    if settings.anthropic_api_key:
+        return anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    return anthropic.AsyncAnthropic()
 
 
 def _system_blocks(session: Session) -> list[dict]:
