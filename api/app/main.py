@@ -4,9 +4,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
+from app.config import REPO_ROOT
 from app.routers import coach, metrics, sync, training
 from app.scheduler import create_scheduler
+
+WEB_DIST = REPO_ROOT / "web" / "dist"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -45,3 +49,10 @@ app.include_router(sync.router)
 @app.get("/api/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+# Serve the built frontend when it exists, so the whole app is one process on one
+# port and needs no Node at runtime — which is what makes running it entirely on a
+# phone practical. Mounted last so the API routes above still win.
+if WEB_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")

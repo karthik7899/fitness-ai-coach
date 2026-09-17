@@ -183,6 +183,16 @@ def test_files_are_identified_by_content_not_extension(inbox_dir, tmp_path):
     assert inbox.detect_kind(tmp_path / "notes.txt") == inbox.KIND_UNKNOWN
 
 
+def test_gadgetbridge_auto_export_has_no_extension(inbox_dir, session):
+    """Gadgetbridge's scheduled export is a bare file named `Gadgetbridge`."""
+    write_gadgetbridge_db(inbox_dir / "Gadgetbridge", [(epoch(TODAY, 9), 4321, 60, 1)])
+    assert inbox.detect_kind(inbox_dir / "Gadgetbridge") == inbox.KIND_GADGETBRIDGE
+
+    result = inbox.scan(session)[0]
+    assert result.written > 0
+    assert (inbox_dir / "processed" / "Gadgetbridge").exists()
+
+
 def test_dropped_files_import_and_move_to_processed(session, inbox_dir):
     write_fitnotes_db(
         inbox_dir / "b.fitnotes", [(TODAY.isoformat(), "Back Squat", 100.0, 5, 0)]

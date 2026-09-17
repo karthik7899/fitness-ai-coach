@@ -158,6 +158,48 @@ and a table view so no value is reachable only by hovering. The two-series
 palette is validated for colour-vision deficiency against the app's own dark
 surface. One filter row scopes every chart below it.
 
+## Running it entirely on a phone
+
+This is the setup the app suits best. Gadgetbridge and FitNotes already run on
+your phone, so if the server runs there too, the data never moves between devices
+at all — no Syncthing, no cable, no network, nothing to expose.
+
+FastAPI serves the built frontend, so it is one process on one port and needs no
+Node at runtime. The browser is on the same device, so loopback is enough and the
+absence of authentication stops mattering.
+
+```bash
+# Termux, from F-Droid — not the Play Store build
+pkg install postgresql python git
+termux-wake-lock                     # and allow "stop optimizing battery usage"
+
+initdb $PREFIX/var/lib/postgresql
+pg_ctl -D $PREFIX/var/lib/postgresql start
+createdb aura
+
+git clone <this repo> && cd aura/api
+pip install -e .                     # see the psycopg note below
+alembic upgrade head
+python -m app.seed
+uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Then open `http://127.0.0.1:8000` in the phone's browser and add it to the home
+screen.
+
+Two wrinkles. **psycopg**: `psycopg[binary]` has no Android wheel, so install
+plain `psycopg` — Termux's `postgresql` package provides the libpq it needs.
+**The frontend**: `web/dist` has to exist. Either `pkg install nodejs && cd web &&
+npm install && npm run build` on the phone, or build it on a computer and copy
+the `web/dist` folder across.
+
+Then point the exports at the inbox and nothing needs touching again:
+
+- **Gadgetbridge** → Settings → Auto export → enabled, and set the location to
+  `data/inbox/`. The scheduled export is a bare file named `Gadgetbridge` with no
+  extension; the inbox identifies files by content, so that is fine.
+- **FitNotes** → Settings → Backup → automatic backup, pointed at the same folder.
+
 ## Tests
 
 ```bash
