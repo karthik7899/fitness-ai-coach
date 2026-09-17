@@ -35,6 +35,11 @@ select = ["E", "F", "I", "UP", "B"]
 # B008 fires on FastAPI's Depends() default-argument idiom, which is correct here.
 ignore = ["B008"]
 
+[tool.ruff.lint.per-file-ignores]
+# conftest sets DATABASE_URL before the app imports that build the settings
+# singleton, so its imports cannot be hoisted to the top of the file.
+"tests/conftest.py" = ["I001"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 pythonpath = ["."]

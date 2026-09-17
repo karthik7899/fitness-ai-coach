@@ -158,6 +158,28 @@ and a table view so no value is reachable only by hovering. The two-series
 palette is validated for colour-vision deficiency against the app's own dark
 surface. One filter row scopes every chart below it.
 
+## Tests
+
+```bash
+cd api && uv run pytest
+```
+
+58 tests against a real Postgres database built by the real migrations — the SQL
+views are exercised, not mocked, since that is where every number the coach
+quotes comes from. The suite creates and drops an `aura_test` database, and each
+test runs inside a transaction that is rolled back, so tests never see each
+other's rows.
+
+They cover the guarded e1RM formula, warmup exclusion from volume, muscle
+attribution and its category fallback, rest days counting as zero load, ACWR,
+multi-device metric precedence, unit conversion on import, import idempotency,
+file identification by content, and the HTTP contract the web app is written
+against.
+
+Verified by mutation: removing the pounds-to-kilograms conversion, accepting
+implausible heart rates, and widening the e1RM rep guard each fail exactly the
+test that should catch them.
+
 ## Status
 
 Working end to end: schema and migrations, metrics views, exercise catalogue,
