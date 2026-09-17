@@ -71,6 +71,24 @@ export interface ProgressionRow {
   working_sets: number;
 }
 
+export interface GeminiSettings {
+  configured: boolean;
+  source: "ui" | "env" | null;
+  hint: string | null;
+  can_clear: boolean;
+  model: string;
+  model_source: "ui" | "env";
+}
+
+export interface SettingsPayload {
+  gemini: GeminiSettings;
+}
+
+export interface SaveResult extends SettingsPayload {
+  verified: boolean;
+  error: string | null;
+}
+
 const range = (start: string, end: string) => `start=${start}&end=${end}`;
 
 export const api = {
@@ -97,6 +115,11 @@ export const api = {
       body: JSON.stringify(body),
     }),
   deleteSet: (setId: number) => request<void>(`/sets/${setId}`, { method: "DELETE" }),
+
+  settings: () => request<SettingsPayload>("/settings"),
+  saveGemini: (body: { api_key?: string; model?: string }) =>
+    request<SaveResult>("/settings/gemini", { method: "PUT", body: JSON.stringify(body) }),
+  clearGemini: () => request<void>("/settings/gemini", { method: "DELETE" }),
 };
 
 export type CoachEvent =

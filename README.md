@@ -42,10 +42,18 @@ facts (injuries, goals, constraints) that load into every later conversation.
 
 The tool specs in `agent/tools.py` are plain JSON Schema and carry no provider
 types; only `agent/coach.py` knows about Gemini, so swapping providers is one
-file. Get a free key at [aistudio.google.com/apikey][key] — but note that on the
-free tier Google may use prompts and responses to improve its products, including
-human review. This app's prompts carry your training history, sleep and injuries;
-a paid key excludes that data from training.
+file.
+
+Get a free key at [aistudio.google.com/apikey][key] and paste it into the
+**Settings** tab — it is stored in the database and checked against the API on
+save, so a bad key fails there rather than at chat time. `GEMINI_API_KEY` in
+`.env` still works for headless setup; a key entered in the UI takes precedence,
+and Settings always shows which of the two is in use. The key is never sent back
+to the browser, only its last four characters.
+
+Note that on Google's free tier prompts and responses may be used to improve
+their products, including human review. This app's prompts carry your training
+history, sleep and injuries; a paid key excludes that data from training.
 
 [key]: https://aistudio.google.com/apikey
 

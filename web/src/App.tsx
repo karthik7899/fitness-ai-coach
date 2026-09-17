@@ -3,9 +3,10 @@ import { useState } from "react";
 import Coach from "./pages/Coach";
 import Dashboard from "./pages/Dashboard";
 import Log from "./pages/Log";
+import Settings from "./pages/Settings";
 import Trends from "./pages/Trends";
 
-const TABS = ["Dashboard", "Log", "Trends", "Coach"] as const;
+const TABS = ["Dashboard", "Log", "Trends", "Coach", "Settings"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
         {tab === "Log" && <Log />}
         {tab === "Trends" && <Trends />}
         {tab === "Coach" && <Coach />}
+        {tab === "Settings" && <Settings />}
       </main>
     </div>
   );

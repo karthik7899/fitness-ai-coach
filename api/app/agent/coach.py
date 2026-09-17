@@ -18,8 +18,8 @@ from google.genai import types
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import settings_store
 from app.agent.tools import HANDLERS, TOOL_SPECS
-from app.config import settings
 from app.models import ChatMessage, CoachNote, Conversation
 
 MAX_TURNS = 12
@@ -51,12 +51,11 @@ intention.
 """
 
 
-def _client() -> genai.Client:
-    # An unset setting does not mean no credentials: the bare constructor picks up
-    # GEMINI_API_KEY or GOOGLE_API_KEY from the environment.
-    if settings.gemini_api_key:
-        return genai.Client(api_key=settings.gemini_api_key)
-    return genai.Client()
+def _client(session: Session) -> genai.Client:
+    # A key entered in the UI wins over .env; with neither, the bare constructor
+    # still picks up GEMINI_API_KEY or GOOGLE_API_KEY from the environment.
+    key, _ = settings_store.gemini_api_key(session)
+    return genai.Client(api_key=key) if key else genai.Client()
 
 
 def declarations() -> list[types.FunctionDeclaration]:
@@ -165,7 +164,8 @@ async def stream_turn(
     session: Session, conversation: Conversation, user_text: str
 ) -> AsyncIterator[dict]:
     """Run one user turn to completion, yielding SSE payloads as it goes."""
-    client = _client()
+    client = _client(session)
+    model, _ = settings_store.gemini_model(session)
 
     contents = _load_history(session, conversation.id)
     user_turn = types.Content(role="user", parts=[types.Part(text=user_text)])
@@ -185,7 +185,7 @@ async def stream_turn(
         streamed: list[types.Part] = []
 
         stream = await client.aio.models.generate_content_stream(
-            model=settings.gemini_model, contents=contents, config=config
+            model=model, contents=contents, config=config
         )
         async for chunk in stream:
             if not chunk.candidates:

@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.config import REPO_ROOT
-from app.routers import coach, metrics, sync, training
+from app.routers import coach, metrics, settings, sync, training
 from app.scheduler import create_scheduler
 
 WEB_DIST = REPO_ROOT / "web" / "dist"
@@ -44,6 +44,7 @@ app.include_router(training.router)
 app.include_router(metrics.router)
 app.include_router(coach.router)
 app.include_router(sync.router)
+app.include_router(settings.router)
 
 
 @app.get("/api/health")

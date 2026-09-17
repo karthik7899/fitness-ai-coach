@@ -90,6 +90,18 @@ class RawRecord(Base):
     )
 
 
+class AppSetting(Base):
+    """Configuration entered through the UI, so the app is usable without a .env."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSONB)
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class OAuthToken(Base):
     """Third-party OAuth credentials, one row per upstream service."""
 

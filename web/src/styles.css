@@ -400,3 +400,24 @@ button.link {
   opacity: 0.6;
   transition: opacity 0.15s ease;
 }
+
+.stack-tight {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 420px;
+}
+
+.ok {
+  color: var(--status-good);
+}
+
+a {
+  color: var(--accent);
+}
+
+code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
+  color: var(--text);
+}
