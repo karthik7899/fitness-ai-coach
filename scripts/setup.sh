@@ -32,6 +32,16 @@ if [ "$TERMUX" = 1 ]; then
     # Android kills background processes; without this the database dies as
     # soon as you switch apps.
     termux-wake-lock || echo "termux-wake-lock unavailable; install Termux:API"
+
+    if [ ! -d "$HOME/storage" ]; then
+        say "Storage access"
+        # Termux is sandboxed and cannot see shared storage until this is
+        # granted — which is where FitNotes and Gadgetbridge write their
+        # backups, so without it there is nothing for the app to import.
+        echo "Android will ask for permission. Allow it."
+        termux-setup-storage || echo "Could not request storage access; run termux-setup-storage by hand."
+        sleep 2
+    fi
 fi
 
 say "PostgreSQL"

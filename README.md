@@ -229,12 +229,21 @@ git clone <this repo> && cd fitness-ai-coach
 wake lock, runs the migrations, seeds the catalogue and builds the frontend. Open
 `http://127.0.0.1:8000` in the phone's browser and add it to the home screen.
 
+Termux is sandboxed and cannot see shared storage until you grant it — the script
+asks, and Android shows a permission dialog. After that `~/storage/shared`
+is the usual `/storage/emulated/0`, and either path works in the watch list.
+
 Then point the backups at the app once, in **Settings → Automatic import**:
 
 - **Gadgetbridge** → Settings → Auto export → enabled. Add its folder to the
   watch list. The export is a bare file named `Gadgetbridge` with no extension;
   files are identified by content, so that is fine.
 - **FitNotes** → Settings → Backup → automatic backup. Add that folder too.
+
+Set both export locations to an ordinary folder such as `Documents` or
+`Download`. On Android 11 and later, apps' own `Android/data/…` directories are
+off limits to other apps, Termux included, so a backup written there cannot be
+read no matter what you put in the watch list.
 
 After this nothing needs touching again: both apps back themselves up, and the
 scheduler imports whatever is new every two minutes.
