@@ -226,8 +226,14 @@ git clone <this repo> && cd fitness-ai-coach
 ```
 
 `setup.sh` installs PostgreSQL, Python and Node, initialises the cluster, takes a
-wake lock, runs the migrations, seeds the catalogue and builds the frontend. Open
-`http://127.0.0.1:8000` in the phone's browser and add it to the home screen.
+wake lock, runs the migrations, seeds the catalogue and builds the frontend.
+
+Then open `http://127.0.0.1:8000` in Chrome and choose **Install app** (or Add to
+home screen). It is a progressive web app, so it gets its own icon and opens
+without browser chrome — there is no APK, because the thing that has to run is a
+server and a database, which an APK cannot host. The service worker caches only
+the shell and never the API: a dashboard showing yesterday's load as though it
+were today's is a worse failure than a blank screen.
 
 Termux is sandboxed and cannot see shared storage until you grant it — the script
 asks, and Android shows a permission dialog. After that `~/storage/shared`
