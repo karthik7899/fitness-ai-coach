@@ -11,12 +11,12 @@ from decimal import Decimal
 
 import httpx
 from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.adapters.base import SyncOutcome, get_token, save_token, store_raw, sync_run
 from app.config import settings
 from app.models import Activity
+from app.upsert import upsert
 
 SOURCE = "strava"
 AUTH_URL = "https://www.strava.com/oauth/authorize"
@@ -105,13 +105,12 @@ def _upsert_activity(session: Session, payload: dict, raw_id: int | None) -> Non
         "calories": _decimal(payload.get("calories")),
         "raw_record_id": raw_id,
     }
-    stmt = (
-        pg_insert(Activity)
-        .values(**values)
-        .on_conflict_do_update(
-            constraint="uq_activities_source_external",
-            set_={k: v for k, v in values.items() if k not in ("source", "external_id")},
-        )
+    stmt = upsert(
+        session,
+        Activity,
+        values,
+        index_elements=["source", "external_id"],
+        set_={k: v for k, v in values.items() if k not in ("source", "external_id")},
     )
     session.execute(stmt)
 

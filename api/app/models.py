@@ -10,6 +10,7 @@ import datetime as dt
 from decimal import Decimal
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     CheckConstraint,
@@ -22,10 +23,20 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    and_,
     func,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+# JSONB where it exists, plain JSON on SQLite. Same Python types either way.
+JsonColumn = JSON().with_variant(JSONB(), "postgresql")
+
+# SQLite only auto-increments a column declared exactly INTEGER PRIMARY KEY; a
+# BIGINT one silently gets no rowid behaviour and rejects the insert. Its INTEGER
+# is 64-bit regardless, so nothing is given up.
+BigIntPk = BigInteger().with_variant(Integer(), "sqlite")
 
 # Sources that may write to the canonical tables.
 SOURCE_MANUAL = "manual"
@@ -73,11 +84,11 @@ class RawRecord(Base):
 
     __tablename__ = "raw_records"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
     source: Mapped[str] = mapped_column(String(32))
     kind: Mapped[str] = mapped_column(String(32))
     external_id: Mapped[str | None] = mapped_column(String(128))
-    payload: Mapped[dict] = mapped_column(JSONB)
+    payload: Mapped[dict] = mapped_column(JsonColumn)
     content_hash: Mapped[str] = mapped_column(String(64))
     fetched_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -96,7 +107,7 @@ class AppSetting(Base):
     __tablename__ = "app_settings"
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
-    value: Mapped[dict] = mapped_column(JSONB)
+    value: Mapped[dict] = mapped_column(JsonColumn)
     updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
@@ -108,7 +119,7 @@ class OAuthToken(Base):
     __tablename__ = "oauth_tokens"
 
     service: Mapped[str] = mapped_column(String(32), primary_key=True)
-    payload: Mapped[dict] = mapped_column(JSONB)
+    payload: Mapped[dict] = mapped_column(JsonColumn)
     updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
@@ -121,18 +132,43 @@ class Exercise(Base):
     name: Mapped[str] = mapped_column(String(128), unique=True)
     category: Mapped[str | None] = mapped_column(String(64))
     modality: Mapped[str] = mapped_column(String(32), default="weight_reps")
-    primary_muscles: Mapped[list[str]] = mapped_column(
-        ARRAY(Text), default=list, server_default="{}"
-    )
-    secondary_muscles: Mapped[list[str]] = mapped_column(
-        ARRAY(Text), default=list, server_default="{}"
-    )
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
     sets: Mapped[list[SetEntry]] = relationship(back_populates="exercise")
+
+    # Muscles live in their own table rather than an array column: SQLite has no
+    # ARRAY type, and a junction table means one SQL statement serves both
+    # dialects. The proxies keep the list-of-strings API every caller expects.
+    _primary: Mapped[list[ExerciseMuscle]] = relationship(
+        primaryjoin=lambda: and_(
+            Exercise.id == ExerciseMuscle.exercise_id, ExerciseMuscle.is_primary.is_(True)
+        ),
+        cascade="all, delete-orphan",
+        overlaps="_secondary",
+        lazy="selectin",
+    )
+    _secondary: Mapped[list[ExerciseMuscle]] = relationship(
+        primaryjoin=lambda: and_(
+            Exercise.id == ExerciseMuscle.exercise_id, ExerciseMuscle.is_primary.is_(False)
+        ),
+        cascade="all, delete-orphan",
+        overlaps="_primary",
+        lazy="selectin",
+    )
+
+    primary_muscles: AssociationProxy[list[str]] = association_proxy(
+        "_primary",
+        "muscle",
+        creator=lambda name: ExerciseMuscle(muscle=name, is_primary=True),
+    )
+    secondary_muscles: AssociationProxy[list[str]] = association_proxy(
+        "_secondary",
+        "muscle",
+        creator=lambda name: ExerciseMuscle(muscle=name, is_primary=False),
+    )
 
     __table_args__ = (
         CheckConstraint(
@@ -141,6 +177,16 @@ class Exercise(Base):
             name="ck_exercises_modality",
         ),
     )
+
+
+class ExerciseMuscle(Base):
+    __tablename__ = "exercise_muscles"
+
+    exercise_id: Mapped[int] = mapped_column(
+        ForeignKey("exercises.id", ondelete="CASCADE"), primary_key=True
+    )
+    muscle: Mapped[str] = mapped_column(String(48), primary_key=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class Workout(Base):
@@ -176,7 +222,7 @@ class Workout(Base):
 class SetEntry(Base):
     __tablename__ = "sets"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
     workout_id: Mapped[int] = mapped_column(
         ForeignKey("workouts.id", ondelete="CASCADE"), index=True
     )
@@ -210,7 +256,7 @@ class Activity(Base):
 
     __tablename__ = "activities"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
     source: Mapped[str] = mapped_column(String(32))
     external_id: Mapped[str] = mapped_column(String(128))
     sport_type: Mapped[str] = mapped_column(String(48))
@@ -297,12 +343,12 @@ class ChatMessage(Base):
 
     __tablename__ = "chat_messages"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(BigIntPk, primary_key=True, autoincrement=True)
     conversation_id: Mapped[int] = mapped_column(
         ForeignKey("conversations.id", ondelete="CASCADE"), index=True
     )
     role: Mapped[str] = mapped_column(String(16))
-    content: Mapped[list | dict] = mapped_column(JSONB)
+    content: Mapped[list | dict] = mapped_column(JsonColumn)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

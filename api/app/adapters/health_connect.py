@@ -27,7 +27,6 @@ from pathlib import Path
 
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.adapters.base import SyncOutcome, content_hash, get_token, save_token, store_raw, sync_run
@@ -40,6 +39,7 @@ from app.models import (
     METRIC_STEPS,
     DailyMetric,
 )
+from app.upsert import upsert
 
 SOURCE = "health_connect"
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
@@ -295,15 +295,18 @@ def extract_daily(db_path: Path) -> dict[tuple[dt.date, str], tuple[float, str]]
 def upsert_daily(session: Session, daily: dict[tuple[dt.date, str], tuple[float, str]]) -> int:
     written = 0
     for (day, metric), (value, unit) in daily.items():
-        stmt = (
-            pg_insert(DailyMetric)
-            .values(
-                date=day, metric=metric, source=SOURCE, value=Decimal(str(value)), unit=unit
-            )
-            .on_conflict_do_update(
-                index_elements=[DailyMetric.date, DailyMetric.metric, DailyMetric.source],
-                set_={"value": Decimal(str(value)), "unit": unit},
-            )
+        stmt = upsert(
+            session,
+            DailyMetric,
+            {
+                "date": day,
+                "metric": metric,
+                "source": SOURCE,
+                "value": Decimal(str(value)),
+                "unit": unit,
+            },
+            index_elements=["date", "metric", "source"],
+            set_={"value": Decimal(str(value)), "unit": unit},
         )
         session.execute(stmt)
         written += 1

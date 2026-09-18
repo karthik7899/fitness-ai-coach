@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 
 from alembic import context
 from app.config import settings
+from app.db import configure_sqlite
 from app.models import Base
 
 config = context.config
@@ -25,7 +26,9 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    engine = create_engine(settings.database_url, future=True)
+    # configure_sqlite gives SQLite foreign keys and transactional DDL, so a
+    # migration that fails halfway rolls back instead of leaving a half-built schema.
+    engine = configure_sqlite(create_engine(settings.database_url, future=True))
     with engine.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():

@@ -23,7 +23,6 @@ from collections import defaultdict
 from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -33,6 +32,7 @@ from app.models import (
     METRIC_STEPS,
     DailyMetric,
 )
+from app.upsert import upsert
 
 SOURCE = "gadgetbridge"
 
@@ -155,19 +155,18 @@ def extract_daily(path: Path) -> dict[tuple[dt.date, str], float]:
 def upsert_daily(session: Session, daily: dict[tuple[dt.date, str], float]) -> int:
     written = 0
     for (day, metric), value in daily.items():
-        stmt = (
-            pg_insert(DailyMetric)
-            .values(
-                date=day,
-                metric=metric,
-                source=SOURCE,
-                value=Decimal(str(value)),
-                unit=METRIC_UNITS.get(metric, ""),
-            )
-            .on_conflict_do_update(
-                index_elements=[DailyMetric.date, DailyMetric.metric, DailyMetric.source],
-                set_={"value": Decimal(str(value))},
-            )
+        stmt = upsert(
+            session,
+            DailyMetric,
+            {
+                "date": day,
+                "metric": metric,
+                "source": SOURCE,
+                "value": Decimal(str(value)),
+                "unit": METRIC_UNITS.get(metric, ""),
+            },
+            index_elements=["date", "metric", "source"],
+            set_={"value": Decimal(str(value))},
         )
         session.execute(stmt)
         written += 1

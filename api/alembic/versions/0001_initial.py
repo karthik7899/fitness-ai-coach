@@ -7,9 +7,9 @@ Revises:
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 from alembic import op
+from app.models import BigIntPk, JsonColumn
 
 revision: str = "0001"
 down_revision: str | None = None
@@ -20,11 +20,11 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.create_table(
         "raw_records",
-        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("id", BigIntPk, autoincrement=True, nullable=False),
         sa.Column("source", sa.String(32), nullable=False),
         sa.Column("kind", sa.String(32), nullable=False),
         sa.Column("external_id", sa.String(128), nullable=True),
-        sa.Column("payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("payload", JsonColumn, nullable=False),
         sa.Column("content_hash", sa.String(64), nullable=False),
         sa.Column("fetched_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("processed_at", sa.DateTime(timezone=True), nullable=True),
@@ -36,7 +36,7 @@ def upgrade() -> None:
     op.create_table(
         "oauth_tokens",
         sa.Column("service", sa.String(32), nullable=False),
-        sa.Column("payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("payload", JsonColumn, nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.PrimaryKeyConstraint("service"),
     )
@@ -47,8 +47,6 @@ def upgrade() -> None:
         sa.Column("name", sa.String(128), nullable=False),
         sa.Column("category", sa.String(64), nullable=True),
         sa.Column("modality", sa.String(32), nullable=False, server_default="weight_reps"),
-        sa.Column("primary_muscles", postgresql.ARRAY(sa.Text()), server_default="{}"),
-        sa.Column("secondary_muscles", postgresql.ARRAY(sa.Text()), server_default="{}"),
         sa.Column("is_archived", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.PrimaryKeyConstraint("id"),
@@ -61,6 +59,17 @@ def upgrade() -> None:
     )
     # Case-insensitive uniqueness so "Back Squat" and "back squat" cannot diverge.
     op.execute("CREATE UNIQUE INDEX ix_exercises_name_lower ON exercises (lower(name))")
+
+    # Muscles live in their own table: SQLite has no ARRAY type, and this way
+    # one SQL statement serves both dialects.
+    op.create_table(
+        "exercise_muscles",
+        sa.Column("exercise_id", sa.Integer(), nullable=False),
+        sa.Column("muscle", sa.String(48), nullable=False),
+        sa.Column("is_primary", sa.Boolean(), nullable=False, server_default="1"),
+        sa.PrimaryKeyConstraint("exercise_id", "muscle"),
+        sa.ForeignKeyConstraint(["exercise_id"], ["exercises.id"], ondelete="CASCADE"),
+    )
 
     op.create_table(
         "workouts",
@@ -80,7 +89,7 @@ def upgrade() -> None:
 
     op.create_table(
         "sets",
-        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("id", BigIntPk, autoincrement=True, nullable=False),
         sa.Column("workout_id", sa.Integer(), nullable=False),
         sa.Column("exercise_id", sa.Integer(), nullable=False),
         sa.Column("position", sa.Integer(), nullable=False, server_default="0"),
@@ -106,7 +115,7 @@ def upgrade() -> None:
 
     op.create_table(
         "activities",
-        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("id", BigIntPk, autoincrement=True, nullable=False),
         sa.Column("source", sa.String(32), nullable=False),
         sa.Column("external_id", sa.String(128), nullable=False),
         sa.Column("sport_type", sa.String(48), nullable=False),
@@ -165,10 +174,10 @@ def upgrade() -> None:
 
     op.create_table(
         "chat_messages",
-        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("id", BigIntPk, autoincrement=True, nullable=False),
         sa.Column("conversation_id", sa.Integer(), nullable=False),
         sa.Column("role", sa.String(16), nullable=False),
-        sa.Column("content", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("content", JsonColumn, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["conversation_id"], ["conversations.id"], ondelete="CASCADE"),
@@ -199,6 +208,7 @@ def downgrade() -> None:
     op.drop_table("activities")
     op.drop_table("sets")
     op.drop_table("workouts")
+    op.drop_table("exercise_muscles")
     op.drop_table("exercises")
     op.drop_table("oauth_tokens")
     op.drop_table("raw_records")

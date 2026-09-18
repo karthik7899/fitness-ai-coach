@@ -24,11 +24,11 @@ from decimal import Decimal
 from pathlib import Path
 
 from sqlalchemy import delete, func, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.adapters.base import SyncOutcome, store_raw, sync_run
 from app.models import SOURCE_FITNOTES, Exercise, SetEntry, Workout
+from app.upsert import upsert
 
 LBS_TO_KG = Decimal("0.45359237")
 MILES_TO_M = Decimal("1609.344")
@@ -278,15 +278,17 @@ def import_sets(session: Session, parsed: list[ParsedSet]) -> SyncOutcome:
 
         for day, entries in by_day.items():
             workout_id = session.execute(
-                pg_insert(Workout)
-                .values(
-                    performed_on=day, source=SOURCE_FITNOTES, external_id=day.isoformat()
-                )
-                .on_conflict_do_update(
-                    constraint="uq_workouts_source_external",
+                upsert(
+                    session,
+                    Workout,
+                    {
+                        "performed_on": day,
+                        "source": SOURCE_FITNOTES,
+                        "external_id": day.isoformat(),
+                    },
+                    index_elements=["source", "external_id"],
                     set_={"performed_on": day},
-                )
-                .returning(Workout.id)
+                ).returning(Workout.id)
             ).scalar_one()
 
             # Replace the day wholesale so a re-import cannot duplicate sets.

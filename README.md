@@ -46,6 +46,13 @@ The tool specs in `agent/tools.py` are plain JSON Schema and carry no provider
 types; only `agent/coach.py` knows about Gemini, so swapping providers is one
 file.
 
+**5. Two databases, one schema.** On a phone the database is SQLite — a file the
+server opens, with no daemon to keep alive, which removes the most fragile part
+of an Android install. On a desktop it is PostgreSQL. The migrations, the seven
+views and every write are portable across both, and the whole test suite runs
+against each, so the numbers are the same wherever the app happens to be. Point
+`DATABASE_URL` at either; `setup.sh` picks the right one for the machine.
+
 Get a free key at [aistudio.google.com/apikey][key] and paste it into the
 **Settings** tab — it is stored in the database and checked against the API on
 save, so a bad key fails there rather than at chat time. `GEMINI_API_KEY` in
@@ -77,18 +84,20 @@ port. No `.env` is required: add the API key and the import folders in the
 <summary>What the script does, if you would rather do it by hand</summary>
 
 ```bash
-docker compose up -d                          # or a local PostgreSQL
 cd api
-uv sync --extra binary                        # `--extra system` on Termux
+uv sync                                       # SQLite; nothing else to install
 uv run alembic upgrade head
 uv run python -m app.seed                     # ~35 exercises with muscle mappings
 cd ../web && npm install && npm run build
 cd ../api && uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-psycopg needs libpq. The `binary` extra bundles it, which is easiest everywhere
-except Termux, whose Bionic libc cannot load manylinux wheels — there the
-`system` extra links against Termux's own `postgresql` package instead.
+That runs on SQLite, at `data/aura.db` by default. For PostgreSQL instead,
+start one (`docker compose up -d`), set `DATABASE_URL` in `.env`, and install
+the driver: `uv sync --extra binary`. psycopg needs libpq — the `binary` extra
+bundles it, which is easiest everywhere except Termux, whose Bionic libc cannot
+load manylinux wheels; there `--extra system` links against Termux's own
+`postgresql` package instead.
 
 </details>
 
@@ -173,14 +182,17 @@ for it. Or drop that ZIP in the inbox and skip the OAuth entirely.
 api/
   app/
     models.py          canonical schema
+    db.py              engine setup, including SQLite's corrected defaults
+    views_sql.py       the seven metrics views, one definition per dialect
+    upsert.py          dialect-aware ON CONFLICT
     queries.py         shared SQL row helpers
     scheduler.py       interval sync, started by the app lifespan
     settings_store.py  UI settings layered over .env
     adapters/          inbox, fitnotes, gadgetbridge, strava, health_connect
     agent/             tool definitions + the coaching loop
-  ../scripts/        setup.sh, start.sh — desktop and Termux
     routers/           training, metrics, coach (SSE), sync, settings
-  alembic/versions/    0001 tables, 0002 metrics views, 0003 settings
+  alembic/versions/    0001 tables, 0002 views, 0003 settings, 0004 portability
+scripts/               setup.sh, start.sh — desktop and Termux
 web/
   src/charts/          LineChart, BarChart, scales and formatting
   src/pages/           Dashboard, Log, Trends, Coach, Settings
@@ -225,13 +237,15 @@ git clone <this repo> && cd fitness-ai-coach
 ./scripts/start.sh
 ```
 
-`setup.sh` installs PostgreSQL, Python and Node, initialises the cluster, takes a
-wake lock, runs the migrations, seeds the catalogue and builds the frontend.
+`setup.sh` installs Python and Node, takes a wake lock, creates the SQLite
+database, runs the migrations, seeds the catalogue and builds the frontend. There
+is no database server on a phone: `data/aura.db` is a file, so nothing else has
+to survive Android's process killing.
 
 Then open `http://127.0.0.1:8000` in Chrome and choose **Install app** (or Add to
 home screen). It is a progressive web app, so it gets its own icon and opens
-without browser chrome — there is no APK, because the thing that has to run is a
-server and a database, which an APK cannot host. The service worker caches only
+without browser chrome — there is no APK yet, because the thing that has to run
+is a server, which an APK cannot host. The service worker caches only
 the shell and never the API: a dashboard showing yesterday's load as though it
 were today's is a worse failure than a blank screen.
 
@@ -256,7 +270,7 @@ scheduler imports whatever is new every two minutes.
 
 The real friction is Android, not the install. Background processes get killed,
 so `termux-wake-lock` (taken by the scripts) and the battery-optimisation
-exemption are what keep PostgreSQL alive when you switch apps. If the app stops
+exemption are what keep the server alive when you switch apps. If the app stops
 responding after a while, that is what to check first.
 
 [termux]: https://f-droid.org/packages/com.termux/
@@ -267,11 +281,20 @@ responding after a while, that is what to check first.
 cd api && uv run pytest
 ```
 
-58 tests against a real Postgres database built by the real migrations — the SQL
-views are exercised, not mocked, since that is where every number the coach
-quotes comes from. The suite creates and drops an `aura_test` database, and each
-test runs inside a transaction that is rolled back, so tests never see each
-other's rows.
+79 tests against a real database built by the real migrations — the SQL views are
+exercised, not mocked, since that is where every number the coach quotes comes
+from. Each test runs inside a transaction that is rolled back, so tests never see
+each other's rows.
+
+The same suite runs against both supported databases:
+
+```bash
+cd api && uv run pytest                        # PostgreSQL, creates aura_test
+cd api && TEST_DIALECT=sqlite uv run pytest    # SQLite, a scratch file
+```
+
+Both must pass. A dialect difference in a view would be silent otherwise — the
+coach would simply quote a different number on a phone than on a desktop.
 
 They cover the guarded e1RM formula, warmup exclusion from volume, muscle
 attribution and its category fallback, rest days counting as zero load, ACWR,
@@ -285,9 +308,10 @@ test that should catch them.
 
 ## Status
 
-Working end to end: schema and migrations, metrics views, exercise catalogue,
-strength logging, FitNotes import, the agent tool surface, Strava and Health
-Connect adapters, scheduled sync, and the Dashboard / Log / Trends / Coach UI.
+Working end to end on both PostgreSQL and SQLite: schema and migrations, metrics
+views, exercise catalogue, strength logging, FitNotes import, the agent tool
+surface, Strava and Health Connect adapters, scheduled sync, and the
+Dashboard / Log / Trends / Coach UI.
 
 Unverified: the request path to Gemini needs a live `GEMINI_API_KEY`. Everything
 it reads is tested, and the tool-schema conversion, stream-part merging and

@@ -15,10 +15,10 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models import OAuthToken, RawRecord, SyncRun
+from app.upsert import upsert
 
 
 @dataclass
@@ -40,18 +40,18 @@ def store_raw(
     external_id: str | None = None,
 ) -> int | None:
     """Append a raw payload. Returns the new row id, or None if already stored."""
-    stmt = (
-        pg_insert(RawRecord)
-        .values(
-            source=source,
-            kind=kind,
-            external_id=external_id,
-            payload=payload,
-            content_hash=content_hash(payload),
-        )
-        .on_conflict_do_nothing(constraint="uq_raw_records_source_hash")
-        .returning(RawRecord.id)
-    )
+    stmt = upsert(
+        session,
+        RawRecord,
+        {
+            "source": source,
+            "kind": kind,
+            "external_id": external_id,
+            "payload": payload,
+            "content_hash": content_hash(payload),
+        },
+        index_elements=["source", "content_hash"],
+    ).returning(RawRecord.id)
     return session.execute(stmt).scalar_one_or_none()
 
 
@@ -61,13 +61,12 @@ def get_token(session: Session, service: str) -> dict | None:
 
 
 def save_token(session: Session, service: str, payload: dict) -> None:
-    stmt = (
-        pg_insert(OAuthToken)
-        .values(service=service, payload=payload)
-        .on_conflict_do_update(
-            index_elements=[OAuthToken.service],
-            set_={"payload": payload, "updated_at": dt.datetime.now(dt.UTC)},
-        )
+    stmt = upsert(
+        session,
+        OAuthToken,
+        {"service": service, "payload": payload},
+        index_elements=["service"],
+        set_={"payload": payload, "updated_at": dt.datetime.now(dt.UTC)},
     )
     session.execute(stmt)
     session.commit()

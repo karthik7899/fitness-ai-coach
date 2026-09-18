@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # One-shot install. Works on a desktop and inside Termux on Android.
 #
-# The two environments differ in three ways and are otherwise identical:
-# where PostgreSQL keeps its data, whether psycopg can use a bundled libpq,
-# and whether there is a `su` to run the database as another user.
+# The two environments differ mainly in which database they use: a phone gets
+# SQLite, a desktop gets PostgreSQL. Everything above the database is identical.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -11,12 +10,23 @@ ROOT=$(pwd)
 
 if [ -n "${PREFIX:-}" ] && [ -d "${PREFIX}/bin" ] && command -v pkg >/dev/null 2>&1; then
     TERMUX=1
-    PGDATA="$PREFIX/var/lib/postgresql"
+    # SQLite on a phone. Android kills background processes, so a database
+    # daemon is the single most fragile part of a Termux install — and for one
+    # user on one device, PostgreSQL's concurrency buys nothing.
+    DB="${DB:-sqlite}"
+else
+    TERMUX=0
+    DB="${DB:-postgres}"
+    PGDATA="${PGDATA:-$ROOT/data/pgdata}"
+fi
+
+if [ "$DB" = "sqlite" ]; then
+    # No libpq, no driver to build.
+    PSYCOPG_EXTRA=""
+elif [ "$TERMUX" = 1 ]; then
     # Termux is Bionic libc, so the manylinux psycopg-binary wheels do not apply.
     PSYCOPG_EXTRA="system"
 else
-    TERMUX=0
-    PGDATA="${PGDATA:-$ROOT/data/pgdata}"
     PSYCOPG_EXTRA="binary"
 fi
 
@@ -26,11 +36,14 @@ say() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
 
 if [ "$TERMUX" = 1 ]; then
     say "Installing packages"
-    pkg install -y postgresql python nodejs-lts git
+    PACKAGES="python nodejs-lts git"
+    [ "$DB" = "sqlite" ] || PACKAGES="postgresql $PACKAGES"
+    # shellcheck disable=SC2086
+    pkg install -y $PACKAGES
 
     say "Keeping the app awake"
-    # Android kills background processes; without this the database dies as
-    # soon as you switch apps.
+    # Android kills background processes; without this the server dies as soon
+    # as you switch apps.
     termux-wake-lock || echo "termux-wake-lock unavailable; install Termux:API"
 
     if [ ! -d "$HOME/storage" ]; then
@@ -44,40 +57,57 @@ if [ "$TERMUX" = 1 ]; then
     fi
 fi
 
-say "PostgreSQL"
-if [ ! -d "$PGDATA" ]; then
-    echo "Initialising cluster at $PGDATA"
-    mkdir -p "$PGDATA"
-    initdb -D "$PGDATA" -U aura --auth=trust
-fi
-
-if ! pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then
+if [ "$DB" = "sqlite" ]; then
+    say "Database"
     mkdir -p "$ROOT/data"
-    # -k puts the unix socket in the data directory. The build default is
-    # /var/run/postgresql, which an unprivileged user cannot write to.
-    pg_ctl -D "$PGDATA" -o "-p 5432 -h 127.0.0.1 -k $PGDATA" \
-        -l "$ROOT/data/postgres.log" start
-    for _ in $(seq 1 15); do
-        pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1 && break
-        sleep 1
-    done
+    if ! grep -qs '^DATABASE_URL=' "$ROOT/.env" 2>/dev/null; then
+        echo "DATABASE_URL=sqlite:///$ROOT/data/aura.db" >> "$ROOT/.env"
+    fi
+    echo "SQLite at $ROOT/data/aura.db — nothing to keep running."
+else
+    say "PostgreSQL"
+    if [ ! -d "$PGDATA" ]; then
+        echo "Initialising cluster at $PGDATA"
+        mkdir -p "$PGDATA"
+        initdb -D "$PGDATA" -U aura --auth=trust
+    fi
+
+    if ! pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then
+        mkdir -p "$ROOT/data"
+        # -k puts the unix socket in the data directory. The build default is
+        # /var/run/postgresql, which an unprivileged user cannot write to.
+        pg_ctl -D "$PGDATA" -o "-p 5432 -h 127.0.0.1 -k $PGDATA" \
+            -l "$ROOT/data/postgres.log" start
+        for _ in $(seq 1 15); do
+            pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1 && break
+            sleep 1
+        done
+    fi
+    pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1 || {
+        echo "PostgreSQL did not start; see $ROOT/data/postgres.log" >&2
+        exit 1
+    }
+    createdb -h 127.0.0.1 -U aura aura 2>/dev/null && echo "Created database" || echo "Database exists"
 fi
-pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1 || {
-    echo "PostgreSQL did not start; see $ROOT/data/postgres.log" >&2
-    exit 1
-}
-createdb -h 127.0.0.1 -U aura aura 2>/dev/null && echo "Created database" || echo "Database exists"
 
 say "Python dependencies"
 cd "$ROOT/api"
 if command -v uv >/dev/null 2>&1; then
-    uv sync --extra "$PSYCOPG_EXTRA"
+    if [ -n "$PSYCOPG_EXTRA" ]; then
+        uv sync --extra "$PSYCOPG_EXTRA"
+    else
+        uv sync
+    fi
     PY="uv run python"
     ALEMBIC="uv run alembic"
 else
     [ -d .venv ] || python -m venv .venv
     ./.venv/bin/pip install --quiet --upgrade pip
-    ./.venv/bin/pip install --quiet -e ".[$PSYCOPG_EXTRA]"
+    if [ -n "$PSYCOPG_EXTRA" ]; then
+        ./.venv/bin/pip install --quiet -e ".[$PSYCOPG_EXTRA]"
+    else
+        ./.venv/bin/pip install --quiet -e .
+    fi
     PY="./.venv/bin/python"
     ALEMBIC="./.venv/bin/alembic"
 fi

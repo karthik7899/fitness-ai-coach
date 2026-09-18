@@ -12,25 +12,35 @@ from urllib.parse import urlsplit, urlunsplit
 # Must precede any app import: app.config builds its settings singleton on import,
 # and environment variables outrank the .env file.
 DEFAULT_URL = "postgresql+psycopg://aura:aura@127.0.0.1:5432/aura"
-BASE_URL = os.environ.get("DATABASE_URL", DEFAULT_URL)
 TEST_DB = "aura_test"
+SQLITE_PATH = "/tmp/aura_test.sqlite3"
 
-_parts = urlsplit(BASE_URL)
-TEST_URL = urlunsplit(_parts._replace(path=f"/{TEST_DB}"))
-ADMIN_URL = urlunsplit(_parts._replace(path="/postgres"))
+# TEST_DIALECT selects which database the whole suite runs against. Both are
+# supported by the app, so both are worth running: the SQL views are the coach's
+# only source of numbers, and a dialect difference there would be silent.
+DIALECT = os.environ.get("TEST_DIALECT", "postgresql")
+
+if DIALECT == "sqlite":
+    TEST_URL = f"sqlite:///{SQLITE_PATH}"
+    ADMIN_URL = None
+else:
+    _parts = urlsplit(os.environ.get("DATABASE_URL", DEFAULT_URL))
+    TEST_URL = urlunsplit(_parts._replace(path=f"/{TEST_DB}"))
+    ADMIN_URL = urlunsplit(_parts._replace(path="/postgres"))
+
 os.environ["DATABASE_URL"] = TEST_URL
 
 import datetime as dt  # noqa: E402
 import sqlite3  # noqa: E402
 from pathlib import Path  # noqa: E402
 
-import psycopg  # noqa: E402
 import pytest  # noqa: E402
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from sqlalchemy import create_engine, text  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
+from app.db import configure_sqlite  # noqa: E402
 from app.models import Exercise, SetEntry, Workout  # noqa: E402
 
 API_DIR = Path(__file__).resolve().parents[1]
@@ -42,15 +52,20 @@ def _psycopg_url(url: str) -> str:
 
 @pytest.fixture(scope="session")
 def engine():
-    with psycopg.connect(_psycopg_url(ADMIN_URL), autocommit=True) as conn:
-        conn.execute(f"DROP DATABASE IF EXISTS {TEST_DB} WITH (FORCE)")
-        conn.execute(f"CREATE DATABASE {TEST_DB}")
+    if DIALECT == "sqlite":
+        Path(SQLITE_PATH).unlink(missing_ok=True)
+    else:
+        import psycopg
+
+        with psycopg.connect(_psycopg_url(ADMIN_URL), autocommit=True) as conn:
+            conn.execute(f"DROP DATABASE IF EXISTS {TEST_DB} WITH (FORCE)")
+            conn.execute(f"CREATE DATABASE {TEST_DB}")
 
     config = Config(str(API_DIR / "alembic.ini"))
     config.set_main_option("script_location", str(API_DIR / "alembic"))
     command.upgrade(config, "head")
 
-    engine = create_engine(TEST_URL, future=True)
+    engine = configure_sqlite(create_engine(TEST_URL, future=True))
     yield engine
     engine.dispose()
 

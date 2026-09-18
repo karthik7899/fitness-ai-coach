@@ -7,9 +7,9 @@ Revises: 0002
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 from alembic import op
+from app.models import JsonColumn
 
 revision: str = "0003"
 down_revision: str | None = "0002"
@@ -21,7 +21,7 @@ def upgrade() -> None:
     op.create_table(
         "app_settings",
         sa.Column("key", sa.String(64), nullable=False),
-        sa.Column("value", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("value", JsonColumn, nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.PrimaryKeyConstraint("key"),
     )

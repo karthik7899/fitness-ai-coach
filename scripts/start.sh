@@ -7,23 +7,32 @@ cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 
 if [ -n "${PREFIX:-}" ] && [ -d "${PREFIX}/bin" ] && command -v pkg >/dev/null 2>&1; then
-    PGDATA="$PREFIX/var/lib/postgresql"
     termux-wake-lock 2>/dev/null || true
-else
-    PGDATA="${PGDATA:-$ROOT/data/pgdata}"
 fi
+PGDATA="${PGDATA:-$ROOT/data/pgdata}"
 
-if ! pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then
-    echo "Starting PostgreSQL…"
-    mkdir -p "$ROOT/data"
-    # -k keeps the socket somewhere this user can write; see setup.sh.
-    pg_ctl -D "$PGDATA" -o "-p 5432 -h 127.0.0.1 -k $PGDATA" \
-        -l "$ROOT/data/postgres.log" start
-    for _ in $(seq 1 15); do
-        pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1 && break
-        sleep 1
-    done
-fi
+# The server reads DATABASE_URL from the environment or .env; read it the same
+# way so this script agrees with the app about which database it is starting.
+DB_URL="${DATABASE_URL:-$(sed -n 's/^DATABASE_URL=//p' "$ROOT/.env" 2>/dev/null | tail -n 1)}"
+
+case "$DB_URL" in
+    sqlite*)
+        # Nothing to start: SQLite is a file the server opens itself.
+        ;;
+    *)
+        if ! pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then
+            echo "Starting PostgreSQL…"
+            mkdir -p "$ROOT/data"
+            # -k keeps the socket somewhere this user can write; see setup.sh.
+            pg_ctl -D "$PGDATA" -o "-p 5432 -h 127.0.0.1 -k $PGDATA" \
+                -l "$ROOT/data/postgres.log" start
+            for _ in $(seq 1 15); do
+                pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1 && break
+                sleep 1
+            done
+        fi
+        ;;
+esac
 
 [ -d "$ROOT/web/dist" ] || echo "web/dist missing — the API will run, but there is no UI to open."
 

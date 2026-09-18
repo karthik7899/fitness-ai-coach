@@ -11,11 +11,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import AppSetting
+from app.upsert import upsert
 
 GEMINI = "gemini"
 INGEST = "ingest"
@@ -27,10 +27,8 @@ def get(session: Session, key: str) -> dict | None:
 
 
 def put(session: Session, key: str, value: dict) -> None:
-    stmt = (
-        pg_insert(AppSetting)
-        .values(key=key, value=value)
-        .on_conflict_do_update(index_elements=[AppSetting.key], set_={"value": value})
+    stmt = upsert(
+        session, AppSetting, {"key": key, "value": value}, ["key"], set_={"value": value}
     )
     session.execute(stmt)
     session.commit()
