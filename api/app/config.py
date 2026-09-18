@@ -27,10 +27,17 @@ class Settings(BaseSettings):
 
     # Drop FitNotes backups and Gadgetbridge exports here; the scheduler imports them.
     inbox_dir: str = "data/inbox"
+    # Folders owned by other apps, read in place and never modified.
+    # Comma-separated, e.g. the FitNotes and Gadgetbridge auto-backup targets.
+    watch_dirs: str = ""
 
     @property
     def inbox_path(self) -> Path:
         return REPO_ROOT / self.inbox_dir
+
+    @property
+    def watch_paths(self) -> list[Path]:
+        return [Path(p.strip()).expanduser() for p in self.watch_dirs.split(",") if p.strip()]
 
     @property
     def google_credentials_path(self) -> Path:

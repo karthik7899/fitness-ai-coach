@@ -80,8 +80,15 @@ export interface GeminiSettings {
   model_source: "ui" | "env";
 }
 
+export interface IngestSettings {
+  inbox_dir: string;
+  watch_dirs: { path: string; exists: boolean }[];
+  watch_source: "ui" | "env";
+}
+
 export interface SettingsPayload {
   gemini: GeminiSettings;
+  ingest: IngestSettings;
 }
 
 export interface SaveResult extends SettingsPayload {
@@ -120,6 +127,13 @@ export const api = {
   saveGemini: (body: { api_key?: string; model?: string }) =>
     request<SaveResult>("/settings/gemini", { method: "PUT", body: JSON.stringify(body) }),
   clearGemini: () => request<void>("/settings/gemini", { method: "DELETE" }),
+  saveWatchDirs: (watch_dirs: string[]) =>
+    request<SettingsPayload & { warning: string | null }>("/settings/ingest", {
+      method: "PUT",
+      body: JSON.stringify({ watch_dirs }),
+    }),
+  syncInbox: () =>
+    request<{ directory: string; files: unknown[] }>("/sync/inbox", { method: "POST" }),
 };
 
 export type CoachEvent =

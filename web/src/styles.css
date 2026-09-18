@@ -421,3 +421,16 @@ code {
   font-size: 0.9em;
   color: var(--text);
 }
+
+textarea {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: inherit;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  resize: vertical;
+  width: 100%;
+}

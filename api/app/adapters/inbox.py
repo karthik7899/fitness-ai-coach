@@ -1,13 +1,20 @@
-"""Local file-drop ingestion.
+"""Local file ingestion, in two modes.
 
-Drop a FitNotes backup or a Gadgetbridge export into the inbox directory and the
-scheduler picks it up — no cloud account in the path. Sync the folder from your
-phone with Syncthing, or copy over USB; the app only ever reads a local
-directory.
+**The inbox** is a queue you drop files into. Imported files move to
+`processed/`, unrecognised ones to `rejected/`, so what remains is what is
+waiting.
 
-Files are identified by probing their contents rather than trusting the
-extension, imported once (keyed on the file's hash, so re-dropping the same
-backup is a no-op), and then moved into `processed/` so the inbox stays a queue.
+**Watch folders** are directories another app owns — FitNotes' automatic backup
+target, Gadgetbridge's auto-export folder. These are read and never written:
+moving a backup out from under the app that made it would be rude at best and
+destructive at worst. Point the app at those folders and the whole pipeline is
+automatic, with no cloud account and nothing to remember.
+
+Both modes identify files by probing contents rather than trusting extensions,
+and import each once, keyed on the file's hash. Automatic backups overwrite the
+same filename with new content, which is exactly the case hashing handles: same
+name, new hash, re-imported — and the FitNotes importer replaces a day rather
+than duplicating it, so repeats are safe.
 """
 
 from __future__ import annotations
@@ -97,54 +104,79 @@ def _move_to(path: Path, folder: str) -> None:
     shutil.move(str(path), str(target))
 
 
-def scan(session: Session) -> list[Imported]:
-    """Import every file waiting in the inbox. Returns one result per file."""
+def _handle(session: Session, path: Path, consume: bool) -> Imported | None:
+    """Import one file. `consume` files are moved aside; watched ones are left alone.
+
+    Returns None when there is nothing worth reporting — an already-imported file,
+    or something unrelated sitting in a watched folder.
+    """
+    kind = detect_kind(path)
+
+    if kind == KIND_UNKNOWN:
+        if not consume:
+            # A watched folder belongs to another app and will be full of files
+            # that are none of our business. Silence is the correct response.
+            return None
+        # Nothing about this will change on a retry, so set it aside rather than
+        # re-reporting it on every scan.
+        _move_to(path, "rejected")
+        return Imported(path=path, kind=kind, written=0, error="unrecognised file type")
+
+    raw_id = store_raw(
+        session,
+        SOURCE,
+        kind,
+        {"name": path.name, "sha256": _file_digest(path), "bytes": path.stat().st_size},
+        external_id=path.name,
+    )
+    if raw_id is None:
+        session.commit()
+        if not consume:
+            return None
+        _move_to(path, "processed")
+        return Imported(path=path, kind=kind, written=0)
+
+    try:
+        written = _import_one(session, path, kind)
+        session.commit()
+    except Exception as exc:
+        # A recognised file that failed may just need a retry — the database was
+        # down, or the file was still being written — so leave it where it is.
+        session.rollback()
+        return Imported(path=path, kind=kind, written=0, error=f"{type(exc).__name__}: {exc}")
+
+    if consume:
+        _move_to(path, "processed")
+    return Imported(path=path, kind=kind, written=written)
+
+
+def _files_in(directory: Path) -> list[Path]:
+    if not directory.is_dir():
+        return []
+    return sorted(p for p in directory.iterdir() if p.is_file())
+
+
+def scan(session: Session, watch_dirs: list[Path] | None = None) -> list[Imported]:
+    """Import from the drop queue and from any watched folders."""
     inbox = settings.inbox_path
     inbox.mkdir(parents=True, exist_ok=True)
 
     results: list[Imported] = []
-    for path in sorted(p for p in inbox.iterdir() if p.is_file()):
-        kind = detect_kind(path)
+    for path in _files_in(inbox):
+        outcome = _handle(session, path, consume=True)
+        if outcome is not None:
+            results.append(outcome)
 
-        # Nothing about this file will change on a retry, so set it aside rather
-        # than re-reporting it on every scan.
-        if kind == KIND_UNKNOWN:
-            _move_to(path, "rejected")
-            results.append(
-                Imported(path=path, kind=kind, written=0, error="unrecognised file type")
-            )
+    seen = {inbox.resolve()}
+    for directory in watch_dirs or []:
+        resolved = directory.expanduser().resolve()
+        if resolved in seen:
             continue
-
-        digest = _file_digest(path)
-
-        # Keyed on the file's own hash, so re-dropping the same backup is a no-op.
-        raw_id = store_raw(
-            session,
-            SOURCE,
-            kind,
-            {"name": path.name, "sha256": digest, "bytes": path.stat().st_size},
-            external_id=path.name,
-        )
-        if raw_id is None:
-            session.commit()
-            _move_to(path, "processed")
-            results.append(Imported(path=path, kind=kind, written=0))
-            continue
-
-        try:
-            written = _import_one(session, path, kind)
-            session.commit()
-        except Exception as exc:
-            # A recognised file that failed to import may just need a retry
-            # (the database was down, the file was still copying), so leave it.
-            session.rollback()
-            results.append(
-                Imported(path=path, kind=kind, written=0, error=f"{type(exc).__name__}: {exc}")
-            )
-            continue
-
-        _move_to(path, "processed")
-        results.append(Imported(path=path, kind=kind, written=written))
+        seen.add(resolved)
+        for path in _files_in(resolved):
+            outcome = _handle(session, path, consume=False)
+            if outcome is not None:
+                results.append(outcome)
 
     return results
 
@@ -155,8 +187,11 @@ def is_connected(session: Session) -> bool:  # noqa: ARG001 - uniform adapter si
 
 
 def sync(session: Session) -> SyncOutcome:
+    from app import settings_store
+
+    watched, _ = settings_store.watch_dirs(session)
     with sync_run(session, SOURCE) as outcome:
-        for result in scan(session):
+        for result in scan(session, watched):
             outcome.read += 1
             outcome.written += result.written
         return outcome

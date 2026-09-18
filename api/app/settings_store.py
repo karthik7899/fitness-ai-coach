@@ -8,6 +8,7 @@ credential that nobody can see is a genuinely nasty thing to debug.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -17,6 +18,7 @@ from app.config import settings
 from app.models import AppSetting
 
 GEMINI = "gemini"
+INGEST = "ingest"
 
 
 def get(session: Session, key: str) -> dict | None:
@@ -58,6 +60,14 @@ def gemini_model(session: Session) -> tuple[str, str]:
     return settings.gemini_model, "env"
 
 
+def watch_dirs(session: Session) -> tuple[list[Path], str]:
+    """Folders to read in place. Set here, they replace the .env list entirely."""
+    stored = get(session, INGEST) or {}
+    if stored.get("watch_dirs") is not None:
+        return [Path(p).expanduser() for p in stored["watch_dirs"]], "ui"
+    return settings.watch_paths, "env"
+
+
 def mask(secret: str) -> str:
     """Enough to recognise which key is set, not enough to use it."""
     return f"…{secret[-4:]}" if len(secret) > 4 else "…"
@@ -66,7 +76,15 @@ def mask(secret: str) -> str:
 def describe(session: Session) -> dict[str, Any]:
     key, key_source = gemini_api_key(session)
     model, model_source = gemini_model(session)
+    watched, watch_source = watch_dirs(session)
     return {
+        "ingest": {
+            "inbox_dir": str(settings.inbox_path),
+            "watch_dirs": [
+                {"path": str(p), "exists": p.is_dir()} for p in watched
+            ],
+            "watch_source": watch_source,
+        },
         "gemini": {
             "configured": key is not None,
             "source": key_source,

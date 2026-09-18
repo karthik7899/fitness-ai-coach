@@ -141,6 +141,28 @@ def test_sync_status_covers_every_scheduled_adapter(client):
     assert set(status) == {a.source for a in ADAPTERS}
 
 
+def test_import_now_also_reads_the_watched_folders(client, session, tmp_path, monkeypatch):
+    """The endpoint behind the button must do what the scheduler does, not less."""
+    from app import settings_store
+    from app.config import Settings
+    from tests.conftest import write_fitnotes_db
+
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    monkeypatch.setattr(Settings, "inbox_path", property(lambda self: inbox))
+
+    watched = tmp_path / "FitNotesBackup"
+    watched.mkdir()
+    write_fitnotes_db(
+        watched / "FitNotes_Backup.fitnotes", [(TODAY.isoformat(), "Back Squat", 100.0, 5, 0)]
+    )
+    settings_store.put(session, settings_store.INGEST, {"watch_dirs": [str(watched)]})
+
+    body = client.post("/api/sync/inbox").json()
+    assert body["watching"] == [str(watched)]
+    assert [f["written"] for f in body["files"]] == [1]
+
+
 def test_syncing_an_unconnected_source_reports_an_error(client):
     response = client.post("/api/sync/strava")
     assert response.status_code == 400

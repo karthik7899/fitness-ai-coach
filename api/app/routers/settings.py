@@ -84,3 +84,22 @@ async def write(payload: GeminiIn, session: Session = Depends(get_session)):
 @router.delete("/gemini", status_code=204)
 def clear(session: Session = Depends(get_session)):
     settings_store.delete(session, settings_store.GEMINI)
+
+
+class IngestIn(BaseModel):
+    watch_dirs: list[str]
+
+
+@router.put("/ingest")
+def write_ingest(payload: IngestIn, session: Session = Depends(get_session)):
+    """Folders to read in place — FitNotes' and Gadgetbridge's own backup targets."""
+    cleaned = [p.strip() for p in payload.watch_dirs if p.strip()]
+    settings_store.put(session, settings_store.INGEST, {"watch_dirs": cleaned})
+
+    described = settings_store.describe(session)
+    missing = [d["path"] for d in described["ingest"]["watch_dirs"] if not d["exists"]]
+    return {
+        **described,
+        # Saved either way: the folder may appear later, once the other app runs.
+        "warning": f"Not found yet: {', '.join(missing)}" if missing else None,
+    }

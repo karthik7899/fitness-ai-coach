@@ -240,6 +240,64 @@ def test_one_bad_file_does_not_stop_the_others(session, inbox_dir):
     assert results["b-good.fitnotes"].written == 1
 
 
+def test_watched_folders_are_read_but_never_modified(session, inbox_dir, tmp_path):
+    """FitNotes owns its backup folder; moving files out of it would be destructive."""
+    watched = tmp_path / "FitNotes"
+    watched.mkdir()
+    backup = write_fitnotes_db(
+        watched / "FitNotes_Backup.fitnotes", [(TODAY.isoformat(), "Back Squat", 100.0, 5, 0)]
+    )
+
+    results = inbox.scan(session, [watched])
+    assert results[0].written == 1
+    assert backup.exists(), "the backup must stay where its own app put it"
+    assert not (watched / "processed").exists(), "no folders created in someone else's directory"
+
+
+def test_unrelated_files_in_a_watched_folder_are_ignored_silently(session, inbox_dir, tmp_path):
+    watched = tmp_path / "Documents"
+    watched.mkdir()
+    (watched / "shopping-list.txt").write_text("eggs")
+    (watched / "photo.jpg").write_bytes(b"\xff\xd8\xff")
+
+    assert inbox.scan(session, [watched]) == []
+    assert (watched / "shopping-list.txt").exists()
+    assert not (watched / "rejected").exists()
+
+
+def test_a_watched_file_is_imported_once_until_its_contents_change(session, inbox_dir, tmp_path):
+    watched = tmp_path / "FitNotes"
+    watched.mkdir()
+    path = watched / "FitNotes_Backup.fitnotes"
+    write_fitnotes_db(path, [(TODAY.isoformat(), "Back Squat", 100.0, 5, 0)])
+
+    assert inbox.scan(session, [watched])[0].written == 1
+    assert inbox.scan(session, [watched]) == [], "unchanged file must not re-import"
+
+    # An automatic backup overwrites the same name with new contents.
+    path.unlink()
+    write_fitnotes_db(
+        path,
+        [
+            (TODAY.isoformat(), "Back Squat", 100.0, 5, 0),
+            (TODAY.isoformat(), "Back Squat", 105.0, 5, 0),
+        ],
+    )
+    assert inbox.scan(session, [watched])[0].written == 2
+
+
+def test_a_watched_folder_that_does_not_exist_is_skipped(session, inbox_dir, tmp_path):
+    assert inbox.scan(session, [tmp_path / "nope"]) == []
+
+
+def test_the_inbox_is_not_scanned_twice_when_also_listed_as_watched(session, inbox_dir):
+    write_fitnotes_db(
+        inbox_dir / "b.fitnotes", [(TODAY.isoformat(), "Back Squat", 100.0, 5, 0)]
+    )
+    results = inbox.scan(session, [inbox_dir])
+    assert len(results) == 1
+
+
 def test_imported_watch_data_reaches_the_metrics_view(session, inbox_dir):
     write_gadgetbridge_db(inbox_dir / "w.db", [(epoch(TODAY, 9), 1234, 60, 1)])
     inbox.scan(session)

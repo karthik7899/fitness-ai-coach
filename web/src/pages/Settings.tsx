@@ -4,6 +4,105 @@ import { api, type SettingsPayload } from "../api";
 
 const KEY_URL = "https://aistudio.google.com/apikey";
 
+function WatchFolders({
+  current,
+  onSaved,
+}: {
+  current: SettingsPayload;
+  onSaved: (s: SettingsPayload) => void;
+}) {
+  const [draft, setDraft] = useState(
+    current.ingest.watch_dirs.map((d) => d.path).join("\n"),
+  );
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setNote(null);
+    try {
+      const saved = await api.saveWatchDirs(draft.split("\n"));
+      onSaved(saved);
+      setNote(
+        saved.warning
+          ? { ok: false, message: saved.warning }
+          : { ok: true, message: "Saved. These folders are read every two minutes." },
+      );
+    } catch (e) {
+      setNote({ ok: false, message: String(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const importNow = async () => {
+    setBusy(true);
+    try {
+      const run = await api.syncInbox();
+      setNote({ ok: true, message: `Imported ${run.files.length} file(s).` });
+    } catch (e) {
+      setNote({ ok: false, message: String(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section>
+      <h2>Automatic import</h2>
+      <p className="muted">
+        Point these at the folders FitNotes and Gadgetbridge already back up to, and their
+        data imports itself. The folders are only ever read — files stay where their own app
+        put them. Anything dropped in <code>{current.ingest.inbox_dir}</code> is imported too.
+      </p>
+
+      <form onSubmit={save} className="stack-tight">
+        <textarea
+          rows={3}
+          spellCheck={false}
+          placeholder={"/storage/emulated/0/FitNotes\n/storage/emulated/0/Gadgetbridge"}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        <span className="muted" style={{ fontSize: 12 }}>
+          One folder per line.
+          {current.ingest.watch_source === "env" && " Currently taken from .env."}
+        </span>
+        <div className="row">
+          <button type="submit" disabled={busy}>
+            Save folders
+          </button>
+          <button type="button" className="link" onClick={importNow} disabled={busy}>
+            import now
+          </button>
+        </div>
+      </form>
+
+      {current.ingest.watch_dirs.length > 0 && (
+        <table>
+          <tbody>
+            {current.ingest.watch_dirs.map((d) => (
+              <tr key={d.path}>
+                <td>
+                  <code>{d.path}</code>
+                </td>
+                <td>
+                  <span className={d.exists ? "state state-good" : "state state-warning"}>
+                    {d.exists ? "found" : "not found yet"}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {note && <p className={note.ok ? "ok" : "error"}>{note.message}</p>}
+    </section>
+  );
+}
+
 export default function Settings() {
   const [current, setCurrent] = useState<SettingsPayload | null>(null);
   const [apiKey, setApiKey] = useState("");
@@ -137,6 +236,8 @@ export default function Settings() {
           </p>
         )}
       </section>
+
+      <WatchFolders current={current} onSaved={setCurrent} />
 
       <section>
         <h2>Privacy</h2>

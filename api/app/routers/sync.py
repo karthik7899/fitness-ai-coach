@@ -5,6 +5,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import settings_store
 from app.adapters import fitnotes, health_connect, inbox, strava
 from app.config import settings
 from app.db import get_session
@@ -42,10 +43,12 @@ def status(session: Session = Depends(get_session)):
 
 @router.post("/inbox")
 def run_inbox(session: Session = Depends(get_session)):
-    """Import anything waiting in the local inbox directory."""
-    results = inbox.scan(session)
+    """Import from the drop queue and the watched folders, the same work the scheduler does."""
+    watched, _ = settings_store.watch_dirs(session)
+    results = inbox.scan(session, watched)
     return {
         "directory": str(settings.inbox_path),
+        "watching": [str(p) for p in watched],
         "files": [
             {"name": r.path.name, "kind": r.kind, "written": r.written, "error": r.error}
             for r in results

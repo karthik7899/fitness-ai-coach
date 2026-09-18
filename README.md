@@ -1,8 +1,9 @@
 # Aura
 
 A personal training data warehouse with a coaching agent on top. Single user,
-local-first: everything runs on your machine and nothing leaves it except the
-calls you make to Strava, Google Drive and the Claude API.
+local-first: everything runs on your machine, and the only things that leave it
+are the coach's calls to Gemini and whatever you choose to sync from Strava.
+Watch and strength data never need to touch a cloud account at all.
 
 The design principle is that **the database is the product**. Ingestion adapters,
 the metrics layer, the web UI and the coach are all clients of one canonical
@@ -11,11 +12,12 @@ schema.
 ## Architecture
 
 ```
-  Strava ──┐
-           ├─► adapters ─► raw_records ─► canonical tables ─► SQL views ─┐
-Health ────┘   (fetch,     (append-only)   (SI units)       (e1RM, ACWR, │
-Connect        normalise,                                    volume)     │
-  export       upsert)                                                   │
+  Strava ────────┐
+  FitNotes ──────┤
+   backup folder ├─► adapters ─► raw_records ─► canonical ─► SQL views ─┐
+  Gadgetbridge ──┤   (fetch,     (append-only)   tables     (e1RM, ACWR, │
+   export folder │    normalise,                 (SI units)  volume)     │
+  Health Connect ┘    upsert)                                            │
                                                                          ▼
   Log UI ──────────────────────────────────────────────────►  coach agent
                                                               (tool calls)
@@ -61,40 +63,60 @@ history, sleep and injuries; a paid key excludes that data from training.
 
 ```bash
 docker compose up -d                 # Postgres on 127.0.0.1:5432
-cp .env.example .env                 # then fill in GEMINI_API_KEY
 
 cd api
 uv sync
 uv run alembic upgrade head
 uv run python -m app.seed            # ~35 exercises with muscle mappings
-uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
-cd ../web
-npm install
-npm run dev                          # http://127.0.0.1:5173
+cd ../web && npm install && npm run build
+cd ../api && uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
+
+Open **http://127.0.0.1:8000** — FastAPI serves the built frontend, so that is the
+whole app on one port. No `.env` is required: add the API key and the import
+folders in the **Settings** tab.
+
+For frontend work, run `npm run dev` alongside instead of building; Vite serves
+on :5173 with hot reload and proxies the API.
 
 ## Data sources
 
-**Strength** is first-party — you log it in the app, so there is no import step.
-To bring existing FitNotes history across, import the backup once:
+**Strength** can be logged in the app directly, or kept in FitNotes and imported.
+Both the `.fitnotes` SQLite backup and the CSV export work. Imported days land
+under `source='fitnotes_import'`, separate from anything logged in the app, and
+re-running replaces each imported day rather than duplicating it. Weights are
+normalised to kilograms on the way in.
+
+There is also a CLI, useful for a one-off backfill or for checking the mapping
+against a real backup before trusting it:
 
 ```bash
 uv run python -m app.adapters.fitnotes --inspect ~/Downloads/FitNotes_Backup.fitnotes
 uv run python -m app.adapters.fitnotes ~/Downloads/FitNotes_Backup.fitnotes
 ```
 
-Both the `.fitnotes` SQLite backup and the CSV export work. Imported days land
-under `source='fitnotes_import'`, separate from anything logged in the app, and
-re-running replaces each imported day rather than duplicating it. Weights are
-normalised to kilograms on the way in — `--inspect` prints the backup's actual
-columns if you want to check the mapping first.
-
 **Strava** connects at `/api/sync/strava/authorize`, then `POST /api/sync/strava`
 pulls activities incrementally from the newest one already stored.
 
-**The inbox** is the simplest path, and involves no cloud account at all. Drop a
-file into `data/inbox/` and the scheduler imports it within two minutes:
+**Watch folders** make import hands-off. Both FitNotes and Gadgetbridge can back
+themselves up automatically to a folder; point the app at those folders in the
+**Settings** tab and nothing else is ever needed — no export step, no copying, no
+cloud account.
+
+- **FitNotes** → Settings → Backup → automatic backup, and note the folder.
+- **Gadgetbridge** → Settings → Auto export → enabled, and note the folder.
+
+Watched folders are read and never written. Moving a backup out from under the
+app that made it would be destructive, so files stay exactly where they are, and
+unrelated files in those folders are ignored silently. Automatic backups
+overwrite the same filename with fresh contents, which is the case hashing
+handles: same name, new hash, re-imported — and the FitNotes importer replaces a
+day rather than duplicating it.
+
+**The inbox** is the manual path, for a one-off backup or a file from another
+device. Drop it into `data/inbox/` and the scheduler imports it within two
+minutes:
 
 | File | Becomes |
 | :--- | :--- |
@@ -107,13 +129,13 @@ Files are identified by probing their contents, not their extension, imported
 once (keyed on the file's hash, so re-dropping a backup is a no-op), then moved
 to `processed/`. Anything unrecognised goes to `rejected/` rather than being
 retried forever. Sync the folder from your phone with Syncthing, or copy it over
-USB — the app only ever reads a local directory.
+USB — the app only ever reads local directories.
 
 **Watch data without Google.** The Da Fit app has no export at all, so the way to
 get your watch data out is to stop using it. [Gadgetbridge][gb] speaks the
 Moyoung/CRRepa protocol these watches use, talks to the watch directly over
-Bluetooth, and needs no account: pair the watch there, then Data Export and drop
-the `.db` in the inbox. Nothing touches Moyoung's servers or Google's.
+Bluetooth, and needs no account: pair the watch there, turn on Auto export, and
+point a watch folder at it. Nothing touches Moyoung's servers or Google's.
 
 Gadgetbridge stores samples in per-device tables whose shape depends on what you
 have paired, so extraction is schema-discovering. Sleep is deliberately
@@ -138,13 +160,14 @@ api/
     models.py          canonical schema
     queries.py         shared SQL row helpers
     scheduler.py       interval sync, started by the app lifespan
-    adapters/          strava, health_connect, fitnotes, shared run bookkeeping
+    settings_store.py  UI settings layered over .env
+    adapters/          inbox, fitnotes, gadgetbridge, strava, health_connect
     agent/             tool definitions + the coaching loop
-    routers/           training, metrics, coach (SSE), sync
-  alembic/versions/    0001 tables, 0002 metrics views
+    routers/           training, metrics, coach (SSE), sync, settings
+  alembic/versions/    0001 tables, 0002 metrics views, 0003 settings
 web/
   src/charts/          LineChart, BarChart, scales and formatting
-  src/pages/           Dashboard, Log, Trends, Coach
+  src/pages/           Dashboard, Log, Trends, Coach, Settings
 ```
 
 ## Background sync
