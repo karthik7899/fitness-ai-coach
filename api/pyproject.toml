@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "aura-api"
 version = "0.1.0"
@@ -8,7 +12,6 @@ dependencies = [
     "uvicorn[standard]>=0.32",
     "sqlalchemy>=2.0.36",
     "alembic>=1.14",
-    "psycopg[binary]>=3.2",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
     "google-genai>=2.0",
@@ -20,8 +23,20 @@ dependencies = [
     "google-auth-oauthlib>=1.2",
 ]
 
+# psycopg needs libpq. The bundled build is the easy default, but it ships only
+# manylinux wheels, which Termux (Bionic libc) cannot use — there, install the
+# `system` extra and let it link against Termux's own postgresql package.
+[project.optional-dependencies]
+binary = ["psycopg[binary]>=3.2"]
+system = ["psycopg>=3.2"]
+
 [dependency-groups]
 dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "ruff>=0.8"]
+
+# Without this, setuptools' flat-layout discovery refuses to build: it finds both
+# `app` and `alembic` at the top level. Only `app` is library code.
+[tool.setuptools]
+packages = ["app"]
 
 [tool.uv]
 package = false

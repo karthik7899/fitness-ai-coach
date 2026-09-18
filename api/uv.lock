@@ -77,13 +77,20 @@ dependencies = [
     { name = "google-auth-oauthlib" },
     { name = "google-genai" },
     { name = "httpx" },
-    { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-multipart" },
     { name = "sqlalchemy" },
     { name = "sse-starlette" },
     { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.optional-dependencies]
+binary = [
+    { name = "psycopg", extra = ["binary"] },
+]
+system = [
+    { name = "psycopg" },
 ]
 
 [package.dev-dependencies]
@@ -102,7 +109,8 @@ requires-dist = [
     { name = "google-auth-oauthlib", specifier = ">=1.2" },
     { name = "google-genai", specifier = ">=2.0" },
     { name = "httpx", specifier = ">=0.27" },
-    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
+    { name = "psycopg", marker = "extra == 'system'", specifier = ">=3.2" },
+    { name = "psycopg", extras = ["binary"], marker = "extra == 'binary'", specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.9" },
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "python-multipart", specifier = ">=0.0.12" },
@@ -110,6 +118,7 @@ requires-dist = [
     { name = "sse-starlette", specifier = ">=2.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]
+provides-extras = ["binary", "system"]
 
 [package.metadata.requires-dev]
 dev = [

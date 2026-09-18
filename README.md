@@ -62,20 +62,35 @@ history, sleep and injuries; a paid key excludes that data from training.
 ## Setup
 
 ```bash
-docker compose up -d                 # Postgres on 127.0.0.1:5432
+./scripts/setup.sh     # database, schema, exercise catalogue, frontend build
+./scripts/start.sh     # http://127.0.0.1:8000
+```
 
+That is the whole install, on a desktop or on a phone — the script detects which
+and adjusts. FastAPI serves the built frontend, so the app is one process on one
+port. No `.env` is required: add the API key and the import folders in the
+**Settings** tab.
+
+`setup.sh` is safe to re-run; it skips anything already done.
+
+<details>
+<summary>What the script does, if you would rather do it by hand</summary>
+
+```bash
+docker compose up -d                          # or a local PostgreSQL
 cd api
-uv sync
+uv sync --extra binary                        # `--extra system` on Termux
 uv run alembic upgrade head
-uv run python -m app.seed            # ~35 exercises with muscle mappings
-
+uv run python -m app.seed                     # ~35 exercises with muscle mappings
 cd ../web && npm install && npm run build
 cd ../api && uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open **http://127.0.0.1:8000** — FastAPI serves the built frontend, so that is the
-whole app on one port. No `.env` is required: add the API key and the import
-folders in the **Settings** tab.
+psycopg needs libpq. The `binary` extra bundles it, which is easiest everywhere
+except Termux, whose Bionic libc cannot load manylinux wheels — there the
+`system` extra links against Termux's own `postgresql` package instead.
+
+</details>
 
 For frontend work, run `npm run dev` alongside instead of building; Vite serves
 on :5173 with hot reload and proxies the API.
@@ -163,6 +178,7 @@ api/
     settings_store.py  UI settings layered over .env
     adapters/          inbox, fitnotes, gadgetbridge, strava, health_connect
     agent/             tool definitions + the coaching loop
+  ../scripts/        setup.sh, start.sh — desktop and Termux
     routers/           training, metrics, coach (SSE), sync, settings
   alembic/versions/    0001 tables, 0002 metrics views, 0003 settings
 web/
@@ -199,37 +215,36 @@ FastAPI serves the built frontend, so it is one process on one port and needs no
 Node at runtime. The browser is on the same device, so loopback is enough and the
 absence of authentication stops mattering.
 
+Install [Termux from F-Droid][termux] — not the Play Store build, which is
+abandoned — then:
+
 ```bash
-# Termux, from F-Droid — not the Play Store build
-pkg install postgresql python git
-termux-wake-lock                     # and allow "stop optimizing battery usage"
-
-initdb $PREFIX/var/lib/postgresql
-pg_ctl -D $PREFIX/var/lib/postgresql start
-createdb aura
-
-git clone <this repo> && cd aura/api
-pip install -e .                     # see the psycopg note below
-alembic upgrade head
-python -m app.seed
-uvicorn app.main:app --host 127.0.0.1 --port 8000
+pkg install git
+git clone <this repo> && cd fitness-ai-coach
+./scripts/setup.sh
+./scripts/start.sh
 ```
 
-Then open `http://127.0.0.1:8000` in the phone's browser and add it to the home
-screen.
+`setup.sh` installs PostgreSQL, Python and Node, initialises the cluster, takes a
+wake lock, runs the migrations, seeds the catalogue and builds the frontend. Open
+`http://127.0.0.1:8000` in the phone's browser and add it to the home screen.
 
-Two wrinkles. **psycopg**: `psycopg[binary]` has no Android wheel, so install
-plain `psycopg` — Termux's `postgresql` package provides the libpq it needs.
-**The frontend**: `web/dist` has to exist. Either `pkg install nodejs && cd web &&
-npm install && npm run build` on the phone, or build it on a computer and copy
-the `web/dist` folder across.
+Then point the backups at the app once, in **Settings → Automatic import**:
 
-Then point the exports at the inbox and nothing needs touching again:
+- **Gadgetbridge** → Settings → Auto export → enabled. Add its folder to the
+  watch list. The export is a bare file named `Gadgetbridge` with no extension;
+  files are identified by content, so that is fine.
+- **FitNotes** → Settings → Backup → automatic backup. Add that folder too.
 
-- **Gadgetbridge** → Settings → Auto export → enabled, and set the location to
-  `data/inbox/`. The scheduled export is a bare file named `Gadgetbridge` with no
-  extension; the inbox identifies files by content, so that is fine.
-- **FitNotes** → Settings → Backup → automatic backup, pointed at the same folder.
+After this nothing needs touching again: both apps back themselves up, and the
+scheduler imports whatever is new every two minutes.
+
+The real friction is Android, not the install. Background processes get killed,
+so `termux-wake-lock` (taken by the scripts) and the battery-optimisation
+exemption are what keep PostgreSQL alive when you switch apps. If the app stops
+responding after a while, that is what to check first.
+
+[termux]: https://f-droid.org/packages/com.termux/
 
 ## Tests
 
