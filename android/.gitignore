@@ -1,0 +1,5 @@
+# Gradle
+.gradle/
+build/
+# Written by Android Studio, points at that machine's SDK.
+local.properties

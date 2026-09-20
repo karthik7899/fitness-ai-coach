@@ -192,7 +192,10 @@ api/
     agent/             tool definitions + the coaching loop
     routers/           training, metrics, coach (SSE), sync, settings
   alembic/versions/    0001 tables, 0002 views, 0003 settings, 0004 portability
-scripts/               setup.sh, start.sh — desktop and Termux
+scripts/               setup.sh, start.sh, export_schema.py
+android/
+  core/                plain Kotlin: schema, metrics queries, tests
+  app/                 Android: SQLite handle and Compose UI
 web/
   src/charts/          LineChart, BarChart, scales and formatting
   src/pages/           Dashboard, Log, Trends, Coach, Settings
@@ -312,6 +315,12 @@ Working end to end on both PostgreSQL and SQLite: schema and migrations, metrics
 views, exercise catalogue, strength logging, FitNotes import, the agent tool
 surface, Strava and Health Connect adapters, scheduled sync, and the
 Dashboard / Log / Trends / Coach UI.
+
+Started: the native Android app under `android/`. Its `core` module — the
+schema and every metrics query — is built and tested (`./gradlew :core:test`,
+18 tests), against a schema generated from these same migrations so the two
+apps cannot drift. The `app` module is scaffolded but has never been compiled;
+see `android/README.md`.
 
 Unverified: the request path to Gemini needs a live `GEMINI_API_KEY`. Everything
 it reads is tested, and the tool-schema conversion, stream-part merging and

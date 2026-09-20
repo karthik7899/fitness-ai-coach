@@ -24,7 +24,9 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     and_,
+    false,
     func,
+    true,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
@@ -132,7 +134,7 @@ class Exercise(Base):
     name: Mapped[str] = mapped_column(String(128), unique=True)
     category: Mapped[str | None] = mapped_column(String(64))
     modality: Mapped[str] = mapped_column(String(32), default="weight_reps")
-    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -186,7 +188,7 @@ class ExerciseMuscle(Base):
         ForeignKey("exercises.id", ondelete="CASCADE"), primary_key=True
     )
     muscle: Mapped[str] = mapped_column(String(48), primary_key=True)
-    is_primary: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
 
 
 class Workout(Base):
@@ -235,7 +237,7 @@ class SetEntry(Base):
     distance_m: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     duration_s: Mapped[int | None] = mapped_column(Integer)
 
-    is_warmup: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    is_warmup: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -305,7 +307,7 @@ class CoachNote(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     kind: Mapped[str] = mapped_column(String(32))
     content: Mapped[str] = mapped_column(Text)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

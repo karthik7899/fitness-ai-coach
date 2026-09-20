@@ -38,7 +38,7 @@ def upgrade() -> None:
             "exercise_muscles",
             sa.Column("exercise_id", sa.Integer(), nullable=False),
             sa.Column("muscle", sa.String(48), nullable=False),
-            sa.Column("is_primary", sa.Boolean(), nullable=False, server_default="1"),
+            sa.Column("is_primary", sa.Boolean(), nullable=False, server_default=sa.true()),
             sa.PrimaryKeyConstraint("exercise_id", "muscle"),
             sa.ForeignKeyConstraint(["exercise_id"], ["exercises.id"], ondelete="CASCADE"),
         )
