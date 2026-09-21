@@ -270,10 +270,12 @@ to survive Android's process killing.
 
 Then open `http://127.0.0.1:8000` in Chrome and choose **Install app** (or Add to
 home screen). It is a progressive web app, so it gets its own icon and opens
-without browser chrome — there is no APK yet, because the thing that has to run
-is a server, which an APK cannot host. The service worker caches only
-the shell and never the API: a dashboard showing yesterday's load as though it
-were today's is a worse failure than a blank screen.
+without browser chrome. The service worker caches only the shell and never the
+API: a dashboard showing yesterday's load as though it were today's is a worse
+failure than a blank screen.
+
+This is the route that works today, and the only one where import runs by
+itself. The native app under `android/` is a separate thing — see below.
 
 Termux is sandboxed and cannot see shared storage until you grant it — the script
 asks, and Android shows a permission dialog. After that `~/storage/shared`
@@ -300,6 +302,31 @@ exemption are what keep the server alive when you switch apps. If the app stops
 responding after a while, that is what to check first.
 
 [termux]: https://f-droid.org/packages/com.termux/
+
+## The native app, without a computer
+
+The Android app cannot be built on the phone — Android Studio is desktop-only —
+but it does not have to be built by you at all. `.github/workflows/android.yml`
+compiles it on every push and attaches the APK to the run, so:
+
+1. Open the repository's **Actions** tab on your phone.
+2. Pick the most recent **Android** run.
+3. Download the **aura-debug-apk** artifact and open the `.apk` inside it.
+4. Android will ask permission to install from your browser. Allow it once.
+
+It is a debug build signed with the throwaway debug key, which is fine for a
+personal app but means it will not update over a Play Store install, and the
+first launch will warn you about an unknown developer.
+
+That workflow is also the only place `:app` is compiled, so its log is the real
+answer to whether the Compose code builds. Until it has run green once, treat
+the native app as unproven.
+
+What the native app does **not** do yet: import from the watch folders on a
+schedule, or back itself up. Both need Android plumbing rather than more logic —
+a foreground service and the storage permission. Until then the Termux app above
+is the one that keeps itself fed, and the two share a database format, so a
+backup taken from one restores into the other.
 
 ## Tests
 
