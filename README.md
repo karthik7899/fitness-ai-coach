@@ -340,11 +340,12 @@ surface, Strava and Health Connect adapters, scheduled sync, backup and restore,
 and the Dashboard / Log / Trends / Coach UI.
 
 Started: the native Android app under `android/`. Its `core` module — the
-schema, every metrics query, both importers and backup verification — is built
-and tested (`./gradlew :core:test`), against a schema generated from these same
-migrations so the two apps cannot drift, and against the shared fixtures in
-`fixtures/` so the two importers cannot either. The `app` module is scaffolded
-but has never been compiled; see `android/README.md`.
+schema, every metrics query, both importers, backup verification and the
+coaching loop — is built and tested (`./gradlew :core:test`, 44 tests). The
+schema and the coach's tool surface are generated from this app, and import
+behaviour is pinned by shared fixtures, so the two cannot drift apart. The
+`app` module is scaffolded but has never been compiled; see
+`android/README.md`.
 
 Unverified: the request path to Gemini needs a live `GEMINI_API_KEY`. Everything
 it reads is tested, and the tool-schema conversion, stream-part merging and

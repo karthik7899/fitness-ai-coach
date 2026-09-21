@@ -57,6 +57,18 @@ private class CursorRow(private val cursor: Cursor) : Row {
 
     override fun isNull(column: String): Boolean = cursor.isNull(index(column))
 
+    override fun columns(): List<String> = cursor.columnNames.toList()
+
+    override fun value(column: String): Any? =
+        index(column).let { i ->
+            when (cursor.getType(i)) {
+                Cursor.FIELD_TYPE_NULL -> null
+                Cursor.FIELD_TYPE_INTEGER -> cursor.getLong(i)
+                Cursor.FIELD_TYPE_FLOAT -> cursor.getDouble(i)
+                else -> cursor.getString(i)
+            }
+        }
+
     override fun stringOrNull(column: String): String? =
         index(column).let { if (cursor.isNull(it)) null else cursor.getString(it) }
 

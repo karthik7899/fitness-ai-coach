@@ -59,6 +59,19 @@ private class JdbcRow(private val results: ResultSet) : Row {
         return results.wasNull()
     }
 
+    override fun columns(): List<String> =
+        results.metaData.let { meta -> (1..meta.columnCount).map { meta.getColumnLabel(it) } }
+
+    override fun value(column: String): Any? =
+        when (val raw = results.getObject(column)) {
+            null -> null
+            is String -> raw
+            is Int, is Long, is Short, is Byte -> (raw as Number).toLong()
+            is Number -> raw.toDouble()
+            is Boolean -> if (raw) 1L else 0L
+            else -> raw.toString()
+        }
+
     override fun stringOrNull(column: String): String? = results.getString(column)
 
     override fun longOrNull(column: String): Long? =

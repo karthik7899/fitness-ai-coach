@@ -13,6 +13,17 @@ package dev.aura.core
 interface Row {
     fun isNull(column: String): Boolean
 
+    /** The result's column names, in order — needed to render a row as JSON. */
+    fun columns(): List<String>
+
+    /**
+     * The column's value as SQLite typed it: String, Long, Double or null.
+     *
+     * The two backends disagree about the boxed type an integer comes back as,
+     * so both normalise here rather than leaving callers to guess.
+     */
+    fun value(column: String): Any?
+
     fun stringOrNull(column: String): String?
 
     fun longOrNull(column: String): Long?
