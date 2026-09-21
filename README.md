@@ -220,6 +220,29 @@ and a table view so no value is reachable only by hovering. The two-series
 palette is validated for colour-vision deficiency against the app's own dark
 surface. One filter row scopes every chart below it.
 
+## Backups
+
+Your whole training history is one SQLite file, on a device that can be lost,
+wiped or replaced. **Settings → Backups** downloads that file; the same page
+restores one.
+
+```bash
+curl -OJ http://127.0.0.1:8000/api/backup                     # download
+curl -F file=@aura-backup-2026-09-21-1349.db \
+     http://127.0.0.1:8000/api/backup/inspect                 # look inside first
+```
+
+The format is the database itself, so anything that speaks SQLite can open it —
+including the Android app, which is built from the same schema. A backup is how
+history moves between the two.
+
+Restoring is deliberately two steps: the file is opened and described before
+anything is replaced, so you see what is in it first. A file that is not a
+readable Aura database is refused with the reason, and the database a restore
+replaces is moved aside rather than deleted, so restoring the wrong file is
+recoverable. On PostgreSQL this refuses and points at `pg_dump`, which does the
+job properly.
+
 ## Running it entirely on a phone
 
 This is the setup the app suits best. Gadgetbridge and FitNotes already run on
@@ -313,14 +336,15 @@ test that should catch them.
 
 Working end to end on both PostgreSQL and SQLite: schema and migrations, metrics
 views, exercise catalogue, strength logging, FitNotes import, the agent tool
-surface, Strava and Health Connect adapters, scheduled sync, and the
-Dashboard / Log / Trends / Coach UI.
+surface, Strava and Health Connect adapters, scheduled sync, backup and restore,
+and the Dashboard / Log / Trends / Coach UI.
 
 Started: the native Android app under `android/`. Its `core` module — the
-schema and every metrics query — is built and tested (`./gradlew :core:test`,
-18 tests), against a schema generated from these same migrations so the two
-apps cannot drift. The `app` module is scaffolded but has never been compiled;
-see `android/README.md`.
+schema, every metrics query, both importers and backup verification — is built
+and tested (`./gradlew :core:test`), against a schema generated from these same
+migrations so the two apps cannot drift, and against the shared fixtures in
+`fixtures/` so the two importers cannot either. The `app` module is scaffolded
+but has never been compiled; see `android/README.md`.
 
 Unverified: the request path to Gemini needs a live `GEMINI_API_KEY`. Everything
 it reads is tested, and the tool-schema conversion, stream-part merging and

@@ -134,7 +134,34 @@ export const api = {
     }),
   syncInbox: () =>
     request<{ directory: string; files: unknown[] }>("/sync/inbox", { method: "POST" }),
+
+  inspectBackup: (file: File) => upload<BackupInfo>("/backup/inspect", file),
+  restoreBackup: (file: File) =>
+    upload<{ restored: BackupInfo; previous_database: string }>("/backup/restore", file),
 };
+
+export type BackupInfo = {
+  workouts: number;
+  sets: number;
+  exercises: number;
+  daily_metrics: number;
+  earliest: string | null;
+  latest: string | null;
+  is_empty: boolean;
+};
+
+async function upload<T>(path: string, file: File): Promise<T> {
+  const body = new FormData();
+  body.append("file", file);
+  const response = await fetch(`/api${path}`, { method: "POST", body });
+  if (!response.ok) {
+    // The server explains what is wrong with the file; that detail is the
+    // whole value of the message, so surface it rather than the status code.
+    const detail = await response.json().catch(() => null);
+    throw new Error(detail?.detail ?? `${response.status} ${response.statusText}`);
+  }
+  return (await response.json()) as T;
+}
 
 export type CoachEvent =
   | { type: "start"; conversation_id: number }

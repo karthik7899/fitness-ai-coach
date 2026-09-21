@@ -1,6 +1,6 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
 
-import { api, type SettingsPayload } from "../api";
+import { api, type BackupInfo, type SettingsPayload } from "../api";
 
 const KEY_URL = "https://aistudio.google.com/apikey";
 
@@ -96,6 +96,104 @@ function WatchFolders({
             ))}
           </tbody>
         </table>
+      )}
+
+      {note && <p className={note.ok ? "ok" : "error"}>{note.message}</p>}
+    </section>
+  );
+}
+
+function Backups() {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ ok: boolean; message: string } | null>(null);
+  const [pending, setPending] = useState<{ file: File; info: BackupInfo } | null>(null);
+
+  const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+
+  const describe = (info: BackupInfo) =>
+    info.is_empty
+      ? "no workouts in it"
+      : `${plural(info.workouts, "workout")}, ${plural(info.sets, "set")}` +
+        (info.earliest
+          ? info.earliest === info.latest
+            ? `, ${info.earliest}`
+            : `, ${info.earliest} to ${info.latest}`
+          : "");
+
+  const choose = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setBusy(true);
+    setNote(null);
+    setPending(null);
+    try {
+      // Look inside before offering to restore it: replacing your history with
+      // the wrong file should take two deliberate steps, not one.
+      const info = await api.inspectBackup(file);
+      setPending({ file, info });
+    } catch (e) {
+      setNote({ ok: false, message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restore = async () => {
+    if (!pending) return;
+    setBusy(true);
+    try {
+      const result = await api.restoreBackup(pending.file);
+      setPending(null);
+      setNote({
+        ok: true,
+        message:
+          `Restored ${describe(result.restored)}. The database this replaced was kept at ` +
+          `${result.previous_database}. Reload to see it.`,
+      });
+    } catch (e) {
+      setNote({ ok: false, message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section>
+      <h2>Backups</h2>
+      <p className="muted">
+        Your whole training history is one file. A backup is that file, so anything that reads
+        SQLite can open it — including the Android app, which shares this schema.
+      </p>
+
+      <div className="row">
+        <a href="/api/backup" download>
+          <button type="button">Download a backup</button>
+        </a>
+        <label className="link" style={{ cursor: "pointer" }}>
+          restore from a file
+          <input type="file" accept=".db,.sqlite,.sqlite3" hidden onChange={choose} />
+        </label>
+      </div>
+
+      {pending && (
+        <div className="stack-tight" style={{ marginTop: "0.75rem" }}>
+          <p>
+            <strong>{pending.file.name}</strong> — {describe(pending.info)}.
+          </p>
+          <p className="muted">
+            Restoring replaces everything currently in the app. The database it replaces is
+            kept alongside it, so this is recoverable.
+          </p>
+          <div className="row">
+            <button type="button" onClick={restore} disabled={busy}>
+              {busy ? "Restoring…" : "Replace my data with this"}
+            </button>
+            <button type="button" className="link" onClick={() => setPending(null)}>
+              cancel
+            </button>
+          </div>
+        </div>
       )}
 
       {note && <p className={note.ok ? "ok" : "error"}>{note.message}</p>}
@@ -238,6 +336,8 @@ export default function Settings() {
       </section>
 
       <WatchFolders current={current} onSaved={setCurrent} />
+
+      <Backups />
 
       <section>
         <h2>Privacy</h2>
