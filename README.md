@@ -277,6 +277,22 @@ failure than a blank screen.
 This is the route that works today, and the only one where import runs by
 itself. The native app under `android/` is a separate thing — see below.
 
+If the dependency install stops on **cryptography**, that is a known Termux
+problem rather than a mistake on your side. `google-genai` depends on
+`google-auth`, which since 2.56 requires `cryptography` outright, and there is
+no prebuilt wheel for Android — so pip tries to build it, which needs Rust, and
+rustup has no Android target. `setup.sh` installs Termux's own prebuilt
+`python-cryptography` and makes the virtualenv able to see it. If some other
+Rust-built package stops it instead:
+
+```bash
+pkg install rust
+rm -rf api/.venv
+./scripts/setup.sh
+```
+
+That builds from source: slow, but it works.
+
 Termux is sandboxed and cannot see shared storage until you grant it — the script
 asks, and Android shows a permission dialog. After that `~/storage/shared`
 is the usual `/storage/emulated/0`, and either path works in the watch list.

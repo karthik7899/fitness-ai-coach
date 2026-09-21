@@ -32,6 +32,26 @@ fi
 
 say() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
 
+# A failed dependency install leaves a half-built virtualenv, and the next
+# thing the user sees is start.sh reporting a missing uvicorn — which says
+# nothing about what actually went wrong. Say it here instead.
+pip_failed() {
+    cat >&2 <<'MSG'
+
+Installing the Python dependencies failed.
+
+If it stopped on a package that needs Rust to build — cryptography and
+pydantic-core are the usual ones — Termux has prebuilt versions of some of
+them, and can build the rest once Rust is present:
+
+    pkg install python-cryptography rust
+    rm -rf api/.venv
+    ./scripts/setup.sh
+
+MSG
+    exit 1
+}
+
 # --------------------------------------------------------------------------
 
 if [ "$TERMUX" = 1 ]; then
@@ -40,6 +60,21 @@ if [ "$TERMUX" = 1 ]; then
     [ "$DB" = "sqlite" ] || PACKAGES="postgresql $PACKAGES"
     # shellcheck disable=SC2086
     pkg install -y $PACKAGES
+
+    # google-genai depends on google-auth, which since 2.56 requires
+    # `cryptography` outright rather than as an extra. There is no wheel for
+    # aarch64-linux-android, so pip tries to build it, which needs Rust — and
+    # rustup has no Android target, so it fails after a long download.
+    #
+    # Termux ships a prebuilt one. Install that and let the virtualenv see it.
+    pkg install -y python-cryptography || cat >&2 <<'WARN'
+Could not install python-cryptography from Termux.
+If the Python dependency step fails on `cryptography`, run:
+
+    pkg install rust
+
+and re-run this script. It will then build from source, which is slow but works.
+WARN
 
     say "Keeping the app awake"
     # Android kills background processes; without this the server dies as soon
@@ -101,12 +136,24 @@ if command -v uv >/dev/null 2>&1; then
     PY="uv run python"
     ALEMBIC="uv run alembic"
 else
-    [ -d .venv ] || python -m venv .venv
+    if [ ! -d .venv ]; then
+        # --system-site-packages on Termux so the virtualenv can see the
+        # packages pkg installed, rather than trying to build them itself.
+        if [ "$TERMUX" = 1 ]; then
+            python -m venv --system-site-packages .venv
+        else
+            python -m venv .venv
+        fi
+    fi
     ./.venv/bin/pip install --quiet --upgrade pip
+    # Not quiet on a phone: this takes minutes, and silence looks like a hang.
+    QUIET="--quiet"
+    [ "$TERMUX" = 1 ] && QUIET=""
+    # shellcheck disable=SC2086
     if [ -n "$PSYCOPG_EXTRA" ]; then
-        ./.venv/bin/pip install --quiet -e ".[$PSYCOPG_EXTRA]"
+        ./.venv/bin/pip install $QUIET -e ".[$PSYCOPG_EXTRA]" || pip_failed
     else
-        ./.venv/bin/pip install --quiet -e .
+        ./.venv/bin/pip install $QUIET -e . || pip_failed
     fi
     PY="./.venv/bin/python"
     ALEMBIC="./.venv/bin/alembic"

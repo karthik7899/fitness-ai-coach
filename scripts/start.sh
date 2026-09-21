@@ -43,6 +43,14 @@ echo "Open http://$HOST:$PORT"
 
 if command -v uv >/dev/null 2>&1; then
     exec uv run uvicorn app.main:app --host "$HOST" --port "$PORT"
-else
-    exec ./.venv/bin/uvicorn app.main:app --host "$HOST" --port "$PORT"
 fi
+
+if [ ! -x ./.venv/bin/uvicorn ]; then
+    # Saying "no such file" here would be true and useless: the real story is
+    # that setup.sh did not finish.
+    echo "The Python environment is missing or incomplete." >&2
+    echo "Run ./scripts/setup.sh and check it finishes without an error." >&2
+    exit 1
+fi
+
+exec ./.venv/bin/uvicorn app.main:app --host "$HOST" --port "$PORT"
