@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 // Java 17 rather than a toolchain: a toolchain would try to download a JDK,
@@ -16,8 +17,12 @@ kotlin {
 }
 
 dependencies {
-    // No production dependencies. Anything added here has to be available on
-    // Android too, so the bar is deliberately high.
+    // The one production dependency. JSON is unavoidable here — the tool
+    // schemas and the Gemini wire format are both JSON — and hand-rolling a
+    // parser for a health app is a worse trade than one Kotlin-first library
+    // that works identically on the JVM and on Android.
+    implementation(libs.kotlinx.serialization.json)
+
     testImplementation(kotlin("test"))
     testImplementation(libs.sqlite.jdbc)
     testImplementation(platform(libs.junit.bom))

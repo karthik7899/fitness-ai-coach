@@ -19,6 +19,16 @@ from app.queries import rows as _rows
 MAX_ROWS = 400
 
 
+def _as_datetime(value: str | None) -> dt.datetime | None:
+    """Accept an ISO date or timestamp; a bare date means the start of that day."""
+    if not value:
+        return None
+    try:
+        return dt.datetime.fromisoformat(value)
+    except ValueError:
+        return dt.datetime.combine(dt.date.fromisoformat(value[:10]), dt.time.min)
+
+
 def _find_exercise(session: Session, name: str) -> Exercise | None:
     return session.scalar(select(Exercise).where(func.lower(Exercise.name) == name.strip().lower()))
 
@@ -31,23 +41,25 @@ def _find_exercise(session: Session, name: str) -> Exercise | None:
 def get_daily_metrics(
     session: Session, start_date: str, end_date: str, metrics: list[str] | None = None
 ) -> dict:
-    sql = """
+    # An `ANY(:array)` clause would be shorter, but arrays are a PostgreSQL
+    # type: on SQLite it fails outright, which on a phone means the coach
+    # cannot answer a question about sleep or steps at all.
+    filter_sql = ""
+    params: dict = {"start": start_date, "end": end_date, "limit": MAX_ROWS}
+    if metrics:
+        placeholders = ", ".join(f":metric_{i}" for i in range(len(metrics)))
+        filter_sql = f"AND metric IN ({placeholders})"
+        params |= {f"metric_{i}": name for i, name in enumerate(metrics)}
+
+    sql = f"""
         SELECT date, metric, value, unit, source
         FROM v_daily_metrics_preferred
         WHERE date BETWEEN :start AND :end
-          AND (:all_metrics OR metric = ANY(:metrics))
+        {filter_sql}
         ORDER BY date DESC, metric
         LIMIT :limit
     """
-    rows = _rows(
-        session,
-        sql,
-        start=start_date,
-        end=end_date,
-        all_metrics=not metrics,
-        metrics=metrics or [],
-        limit=MAX_ROWS,
-    )
+    rows = _rows(session, sql, **params)
     return {"rows": rows, "count": len(rows)}
 
 
@@ -139,21 +151,41 @@ def get_recent_activities(
     sport_type: str | None = None,
     since: str | None = None,
 ) -> dict:
-    sql = """
+    # Three things this query cannot do portably, all of them avoided rather
+    # than worked around:
+    #
+    # `(:param IS NULL OR col = :param)` looks tidy but PostgreSQL cannot infer
+    # the type of a parameter used only that way — psycopg reports an ambiguous
+    # parameter and the tool fails outright. Build the clause instead.
+    #
+    # `round(x, digits)` exists only for numeric on PostgreSQL, so the rounding
+    # is done by multiplying and dividing, which both dialects agree on.
+    #
+    # And `since` is parsed to a datetime here rather than cast in SQL, so
+    # neither dialect needs a cast of its own.
+    filters = []
+    params: dict = {"limit": min(limit, MAX_ROWS)}
+    if sport_type:
+        filters.append("AND sport_type = :sport_type")
+        params["sport_type"] = sport_type
+    since_at = _as_datetime(since)
+    if since_at is not None:
+        filters.append("AND started_at >= :since")
+        params["since"] = since_at
+
+    sql = f"""
         SELECT external_id, sport_type, name, started_at, distance_m, moving_time_s,
                elevation_gain_m, average_hr, max_hr, calories,
                CASE WHEN distance_m > 0 AND moving_time_s > 0
-                    THEN ROUND(((moving_time_s / 60.0) / (distance_m / 1000.0))::numeric, 2)
+                    THEN ROUND(((moving_time_s / 60.0) / (distance_m / 1000.0)) * 100) / 100.0
                END AS pace_min_per_km
         FROM activities
-        WHERE (:sport_type IS NULL OR sport_type = :sport_type)
-          AND (:since IS NULL OR started_at >= :since::timestamptz)
+        WHERE 1 = 1
+        {" ".join(filters)}
         ORDER BY started_at DESC
         LIMIT :limit
     """
-    rows = _rows(
-        session, sql, sport_type=sport_type, since=since, limit=min(limit, MAX_ROWS)
-    )
+    rows = _rows(session, sql, **params)
     return {"rows": rows, "count": len(rows)}
 
 
