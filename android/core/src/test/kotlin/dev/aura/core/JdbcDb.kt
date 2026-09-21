@@ -37,12 +37,18 @@ class JdbcDb(private val connection: Connection) : Db {
 
     companion object {
         /** A fresh empty database with the canonical schema applied. */
-        fun inMemory(): JdbcDb {
+        fun inMemory(): JdbcDb = blank().also { Schema.create(it) }
+
+        /**
+         * A database with nothing in it, for standing up a file some other app
+         * wrote — a FitNotes backup or a Gadgetbridge export.
+         */
+        fun blank(): JdbcDb {
             val connection = DriverManager.getConnection("jdbc:sqlite::memory:")
             // Off by default, so ON DELETE CASCADE would silently do nothing —
             // the same correction the Python side makes.
             connection.createStatement().use { it.execute("PRAGMA foreign_keys=ON") }
-            return JdbcDb(connection).also { Schema.create(it) }
+            return JdbcDb(connection)
         }
     }
 }

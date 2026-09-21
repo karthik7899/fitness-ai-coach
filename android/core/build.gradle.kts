@@ -28,4 +28,7 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
     testLogging { events("failed") }
+    // The import fixtures are shared with the Python suite and live outside
+    // this build, at the repository root.
+    systemProperty("aura.fixtures", rootProject.file("../fixtures").absolutePath)
 }

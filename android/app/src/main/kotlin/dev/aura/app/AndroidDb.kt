@@ -17,9 +17,24 @@ class AndroidDb(private val database: SQLiteDatabase) : Db {
         if (args.isEmpty()) {
             database.execSQL(sql)
         } else {
-            database.execSQL(sql, args.toTypedArray())
+            database.execSQL(sql, args.map { bindable(it) }.toTypedArray())
         }
     }
+
+    /**
+     * execSQL binds only String, Long, Double, byte[] and null — an Int throws.
+     * JDBC takes any of them, so without this the importers would pass their
+     * tests off-device and crash on the phone.
+     */
+    private fun bindable(value: Any?): Any? =
+        when (value) {
+            null, is String, is Long, is Double, is ByteArray -> value
+            is Boolean -> if (value) 1L else 0L
+            is Int, is Short, is Byte -> (value as Number).toLong()
+            is Float -> value.toDouble()
+            is Number -> value.toDouble()
+            else -> value.toString()
+        }
 
     override fun <T> select(sql: String, args: List<Any?>, map: (Row) -> T): List<T> {
         // rawQuery binds every argument as text, so a numeric one would compare
