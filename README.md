@@ -331,5 +331,9 @@ if `GEMINI_MODEL` ever needs updating.
 
 ## Legacy
 
-The flat `*.py` scripts and `.bat`/`.ps1` files in the repository root are the
-previous Streamlit version, kept for reference until the rebuild replaces them.
+The previous Streamlit version — the flat `*.py` scripts, their
+`requirements.txt`, the `.bat`/`.ps1` launchers and the GitHub Actions workflow
+that ran `sync_all.py` every two hours — has been removed now that the rebuild
+covers everything it did. It is in the history if any of it is ever wanted
+again: `git log --diff-filter=D -- sync_all.py` finds the commit that removed
+it.
