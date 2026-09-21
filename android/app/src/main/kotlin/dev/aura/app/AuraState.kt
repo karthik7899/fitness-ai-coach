@@ -7,6 +7,7 @@ import dev.aura.core.Db
 import dev.aura.core.Settings
 import dev.aura.core.agent.Coach
 import dev.aura.core.agent.CoachError
+import dev.aura.core.agent.Conversation
 import dev.aura.core.presentation.DashboardState
 import dev.aura.core.presentation.LogState
 import dev.aura.core.presentation.Range
@@ -18,7 +19,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.JsonObject
 
 enum class Tab(val label: String) {
     DASHBOARD("Dashboard"),
@@ -64,7 +64,7 @@ class AuraState(private val db: Db, private val scope: CoroutineScope) {
         private set
     var chatError by mutableStateOf<String?>(null)
         private set
-    private var history = listOf<JsonObject>()
+    private var conversation = Conversation.EMPTY
 
     var notice by mutableStateOf<String?>(null)
 
@@ -156,8 +156,8 @@ class AuraState(private val db: Db, private val scope: CoroutineScope) {
             val model = onIo { Settings.model(db) }
             try {
                 val answer =
-                    onIo { Coach(db, apiKey = key, model = model).ask(question, history) }
-                history = answer.history
+                    onIo { Coach(db, apiKey = key, model = model).ask(question, conversation) }
+                conversation = answer.conversation
                 chat =
                     chat +
                         ChatTurn(
@@ -173,7 +173,7 @@ class AuraState(private val db: Db, private val scope: CoroutineScope) {
 
     fun clearChat() {
         chat = emptyList()
-        history = emptyList()
+        conversation = Conversation.EMPTY
         chatError = null
     }
 

@@ -100,6 +100,11 @@ wrong arity, bad named arguments and type errors in the app's own logic — and
 it caught a real one: `var range` generates a `setRange` JVM setter, which
 clashed with a method of the same name.
 
+The check is only as honest as its classpath. It once passed while CI failed,
+because the check had kotlinx-serialization on the classpath and `:app` does
+not declare it. The check now gets exactly what `:app` declares — `:core` and
+coroutines — and nothing else.
+
 What it cannot catch is a stub whose signature is wrong, since the stub encodes
 a belief rather than the SDK. So expect the first real build to need something —
 most likely a dependency version or a Compose parameter that has moved. The

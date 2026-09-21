@@ -21,11 +21,32 @@ import kotlinx.serialization.json.putJsonObject
 /** What the model asked for, and what it was told. */
 data class ToolCall(val name: String, val arguments: JsonObject, val result: JsonObject)
 
-/** The end of one exchange: what to show, and the history to carry forward. */
+/**
+ * The conversation so far, carried between turns.
+ *
+ * Opaque on purpose. What is inside is Gemini's wire format, and a screen that
+ * had to know about that would break the moment the provider changed — so it
+ * holds one of these and hands it back, and nothing above this module needs a
+ * JSON library on its classpath to do it.
+ */
+class Conversation internal constructor(internal val contents: List<JsonObject>) {
+    val isEmpty: Boolean
+        get() = contents.isEmpty()
+
+    /** How many turns have been exchanged, counting both sides. */
+    val turns: Int
+        get() = contents.size
+
+    companion object {
+        val EMPTY: Conversation = Conversation(emptyList())
+    }
+}
+
+/** The end of one exchange: what to show, and the conversation to carry forward. */
 data class Answer(
     val text: String,
     val toolCalls: List<ToolCall>,
-    val history: List<JsonObject>,
+    val conversation: Conversation,
 )
 
 /** Anything that can POST JSON and return JSON. Injected so the loop is testable. */
@@ -56,12 +77,12 @@ class Coach(
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    fun ask(message: String, history: List<JsonObject> = emptyList()): Answer {
+    fun ask(message: String, conversation: Conversation = Conversation.EMPTY): Answer {
         if (apiKey.isBlank()) {
             throw CoachError("No Gemini API key set. Add one in Settings.")
         }
 
-        val contents = history.toMutableList()
+        val contents = conversation.contents.toMutableList()
         contents += userContent(message)
         val calls = mutableListOf<ToolCall>()
 
@@ -86,7 +107,11 @@ class Coach(
                 val text =
                     parts.mapNotNull { it.jsonObject["text"]?.jsonPrimitive?.content }
                         .joinToString("")
-                return Answer(text = text, toolCalls = calls, history = contents)
+                return Answer(
+                    text = text,
+                    toolCalls = calls,
+                    conversation = Conversation(contents.toList()),
+                )
             }
 
             val results = buildJsonArray {

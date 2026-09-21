@@ -184,15 +184,25 @@ class CoachTest {
     }
 
     @Test
-    fun `history is carried forward so the next turn has context`() {
+    fun `the conversation is carried forward so the next turn has context`() {
         withDb { db ->
             val coach = Coach(db, apiKey = "test-key", transport = Replay(textResponse("Hi.")))
             val first = coach.ask("Hello")
-            assertEquals(2, first.history.size) // the question and the answer
+            assertEquals(2, first.conversation.turns) // the question and the answer
 
             val replay = Replay(textResponse("Still here."))
-            Coach(db, apiKey = "test-key", transport = replay).ask("And?", first.history)
+            Coach(db, apiKey = "test-key", transport = replay).ask("And?", first.conversation)
             assertTrue(replay.sent.single().contains("Hello"), "the earlier turn was dropped")
+        }
+    }
+
+    @Test
+    fun `a fresh conversation carries nothing`() {
+        withDb { db ->
+            val replay = Replay(textResponse("Hi."))
+            Coach(db, apiKey = "test-key", transport = replay).ask("Hello")
+            assertTrue(dev.aura.core.agent.Conversation.EMPTY.isEmpty)
+            assertTrue(replay.sent.single().contains("Hello"))
         }
     }
 
