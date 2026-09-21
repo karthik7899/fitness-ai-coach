@@ -277,21 +277,32 @@ failure than a blank screen.
 This is the route that works today, and the only one where import runs by
 itself. The native app under `android/` is a separate thing — see below.
 
-If the dependency install stops on **cryptography**, that is a known Termux
-problem rather than a mistake on your side. `google-genai` depends on
-`google-auth`, which since 2.56 requires `cryptography` outright, and there is
-no prebuilt wheel for Android — so pip tries to build it, which needs Rust, and
-rustup has no Android target. `setup.sh` installs Termux's own prebuilt
-`python-cryptography` and makes the virtualenv able to see it. If some other
-Rust-built package stops it instead:
+### The Rust packages
+
+Two dependencies are Rust extensions with no Android wheel: **pydantic-core**
+(under FastAPI) and **cryptography** (under `google-genai` → `google-auth`,
+which has required it outright since 2.56 — there is no version to pin around
+it). pip builds them, maturin looks for a toolchain, finds none, tries rustup,
+and rustup has no Android target. That is the
+`Target triple not supported by rustup` line.
+
+`setup.sh` handles it: it installs Termux's Rust, which does target Android,
+names the target explicitly (`aarch64-linux-android`, not the
+`aarch64-unknown-linux-android` maturin guesses), and takes Termux's prebuilt
+`cryptography` to skip the largest build.
+
+**Expect this step to be slow** — ten minutes or more, and longer on an older
+phone. If the install is *killed* rather than failing with an error, that was
+the out-of-memory killer:
 
 ```bash
-pkg install rust
+export CARGO_BUILD_JOBS=1
 rm -rf api/.venv
 ./scripts/setup.sh
 ```
 
-That builds from source: slow, but it works.
+This is friction the native Android app does not have, because it has no Python
+in it at all.
 
 Termux is sandboxed and cannot see shared storage until you grant it — the script
 asks, and Android shows a permission dialog. After that `~/storage/shared`

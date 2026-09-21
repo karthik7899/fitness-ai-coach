@@ -40,13 +40,18 @@ pip_failed() {
 
 Installing the Python dependencies failed.
 
-If it stopped on a package that needs Rust to build — cryptography and
-pydantic-core are the usual ones — Termux has prebuilt versions of some of
-them, and can build the rest once Rust is present:
+If it stopped on a Rust package — pydantic-core and cryptography are the ones
+that bite — check that Rust is installed and that the target is named, then
+try again:
 
-    pkg install python-cryptography rust
+    pkg install rust binutils
+    export CARGO_BUILD_TARGET=aarch64-linux-android   # `uname -m` if not arm64
+    export CARGO_BUILD_JOBS=1                         # if it ran out of memory
     rm -rf api/.venv
     ./scripts/setup.sh
+
+If it was killed rather than failing with an error, that was the out-of-memory
+killer: CARGO_BUILD_JOBS=1 and closing other apps is the fix.
 
 MSG
     exit 1
@@ -61,20 +66,17 @@ if [ "$TERMUX" = 1 ]; then
     # shellcheck disable=SC2086
     pkg install -y $PACKAGES
 
-    # google-genai depends on google-auth, which since 2.56 requires
-    # `cryptography` outright rather than as an extra. There is no wheel for
-    # aarch64-linux-android, so pip tries to build it, which needs Rust — and
-    # rustup has no Android target, so it fails after a long download.
+    # Several dependencies are Rust extensions with no Android wheel —
+    # cryptography (via google-genai -> google-auth) and pydantic-core (via
+    # FastAPI) among them. pip therefore builds them, and maturin looks for a
+    # toolchain: finding none it tries rustup, which has no Android target, and
+    # gives up with "Target triple not supported by rustup".
     #
-    # Termux ships a prebuilt one. Install that and let the virtualenv see it.
-    pkg install -y python-cryptography || cat >&2 <<'WARN'
-Could not install python-cryptography from Termux.
-If the Python dependency step fails on `cryptography`, run:
-
-    pkg install rust
-
-and re-run this script. It will then build from source, which is slow but works.
-WARN
+    # So: install Termux's Rust, which does target Android, and take its
+    # prebuilt cryptography to skip the largest build.
+    say "Build tools for the Rust-based packages"
+    pkg install -y rust binutils || echo "Could not install Rust; the Python step will likely fail." >&2
+    pkg install -y python-cryptography || echo "No prebuilt cryptography; it will be built from source." >&2
 
     say "Keeping the app awake"
     # Android kills background processes; without this the server dies as soon
@@ -146,6 +148,24 @@ else
         fi
     fi
     ./.venv/bin/pip install --quiet --upgrade pip
+
+    if [ "$TERMUX" = 1 ]; then
+        # maturin derives 'aarch64-unknown-linux-android' from Python's SOABI,
+        # which is not a triple Termux's Rust knows; its own is
+        # 'aarch64-linux-android'. Naming it explicitly is what stops the
+        # rustup detour.
+        case "$(uname -m)" in
+            aarch64|arm64) export CARGO_BUILD_TARGET=aarch64-linux-android ;;
+            armv7l|armv8l) export CARGO_BUILD_TARGET=armv7-linux-androideabi ;;
+            x86_64) export CARGO_BUILD_TARGET=x86_64-linux-android ;;
+        esac
+        # Building pydantic-core with every core at once is what makes a phone
+        # run out of memory partway through.
+        export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
+        echo "Building Rust extensions for ${CARGO_BUILD_TARGET:-this device}."
+        echo "This is the slow part — ten minutes or more is normal. Leave it be."
+    fi
+
     # Not quiet on a phone: this takes minutes, and silence looks like a hang.
     QUIET="--quiet"
     [ "$TERMUX" = 1 ] && QUIET=""
