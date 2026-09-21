@@ -277,6 +277,12 @@ failure than a blank screen.
 This is the route that works today, and the only one where import runs by
 itself. The native app under `android/` is a separate thing — see below.
 
+If `web/dist` is missing, opening that address shows a page saying so rather
+than a bare 404: the API is up, the interface simply has not been built. You
+can build it on the phone (`cd web && npm install && npm run build`) or skip
+Node entirely — the **Web** workflow builds it on every push, so download the
+`web-dist` artifact from the Actions tab and unzip it into `web/dist`.
+
 ### The Rust packages
 
 Two dependencies are Rust extensions with no Android wheel: **pydantic-core**

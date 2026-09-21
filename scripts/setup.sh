@@ -186,11 +186,16 @@ $PY -m app.seed
 say "Frontend"
 cd "$ROOT/web"
 if command -v npm >/dev/null 2>&1; then
-    npm install --silent
+    # Another slow one on a phone, and --silent makes it look stalled.
+    if [ "$TERMUX" = 1 ]; then
+        npm install
+    else
+        npm install --silent
+    fi
     npm run build
 else
-    echo "npm not found. Build web/dist elsewhere and copy it here," >&2
-    echo "or install Node and re-run this script." >&2
+    echo "npm not found, so there is no web interface yet." >&2
+    echo "The server will still run and explain what to do when you open it." >&2
 fi
 
 say "Done"
