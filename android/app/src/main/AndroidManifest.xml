@@ -1,6 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      The coach calls Gemini over HTTPS, and without this Android refuses the
+      connection outright — every question comes back as a permission error.
+      It is an install-time permission, so there is no prompt to accept.
+
+      Nothing else is declared. The importers need storage access and are not
+      wired up yet; the permission goes in when the feature does, not before.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:allowBackup="true"
         android:label="@string/app_name"

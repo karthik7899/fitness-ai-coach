@@ -72,6 +72,16 @@ behaviour is pinned the same way by `fixtures/` — see `fixtures/README.md`.
 `core` therefore holds handlers, queries and the coaching loop, but almost no
 declarations.
 
+## Permissions
+
+`INTERNET`, and nothing else. The coach calls Gemini over HTTPS and Android
+refuses the connection without it — the app installs and runs fine, then every
+question comes back as a permission error, which is how this was found.
+
+The importers need storage access, and that permission goes in when they are
+wired up rather than before. An app that asks for more than it uses is asking
+you to stop reading the list.
+
 ## State
 
 `./gradlew :core:test` — 65 tests, passing. They run the real generated schema

@@ -49,6 +49,19 @@ jobs:
         working-directory: android
         run: ./gradlew :core:test
 
+      # A missing permission compiles perfectly and fails on the device, so no
+      # amount of type-checking finds it. This one cost a release to discover.
+      - name: Check the manifest declares what the code needs
+        working-directory: android
+        run: |
+          manifest=app/src/main/AndroidManifest.xml
+          if grep -rq 'HttpURLConnection\|openConnection' ../android/core/src/main/kotlin; then
+            grep -q 'android.permission.INTERNET' "$manifest" || {
+              echo "The app makes network calls but $manifest does not declare INTERNET." >&2
+              exit 1
+            }
+          fi
+
       - name: Build the app
         working-directory: android
         run: ./gradlew :app:assembleDebug
