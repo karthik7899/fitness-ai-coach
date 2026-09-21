@@ -341,11 +341,12 @@ and the Dashboard / Log / Trends / Coach UI.
 
 Started: the native Android app under `android/`. Its `core` module — the
 schema, every metrics query, both importers, backup verification and the
-coaching loop — is built and tested (`./gradlew :core:test`, 44 tests). The
+coaching loop — is built and tested (`./gradlew :core:test`, 65 tests). The
 schema and the coach's tool surface are generated from this app, and import
 behaviour is pinned by shared fixtures, so the two cannot drift apart. The
-`app` module is scaffolded but has never been compiled; see
-`android/README.md`.
+`app` module now has all five screens in Compose — Dashboard, Log, Trends,
+Coach and Settings — but has never been built by Gradle, only type-checked
+against stubbed Android APIs; see `android/README.md`.
 
 Unverified: the request path to Gemini needs a live `GEMINI_API_KEY`. Everything
 it reads is tested, and the tool-schema conversion, stream-part merging and

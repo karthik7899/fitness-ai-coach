@@ -3,14 +3,17 @@
 The native app, in two modules with a deliberate split:
 
 ```
-core/   plain Kotlin. The schema, the metrics queries, the numbers.
-        No Android imports, no Android SDK needed. Fully tested.
-app/    Android. A SQLite handle, a Compose screen, and little else.
+core/   plain Kotlin. The schema, the queries, the importers, the coach,
+        the screen state and the formatting rules. No Android imports,
+        no Android SDK needed. Fully tested.
+app/    Android. A SQLite handle and Compose. Layout, and little else.
 ```
 
 Everything that can be got wrong quietly — the SQL, the views, the unit
-handling — lives in `core`, where it runs on any JVM and is covered by tests.
-`app` is the part that needs a device, so it is kept as thin as it can be.
+handling, what a screen should say — lives in `core`, where it runs on any JVM
+and is covered by tests. `app` is the part that needs a device, so it is kept as
+thin as it can be: the Compose code queries nothing and computes nothing, it
+renders what `Store` hands it.
 
 ## Building
 
@@ -71,7 +74,7 @@ declarations.
 
 ## State
 
-`./gradlew :core:test` — 44 tests, passing. They run the real generated schema
+`./gradlew :core:test` — 65 tests, passing. They run the real generated schema
 and the real views under SQLite, and assert the same figures the Python suite
 asserts: the guarded Epley estimate, warmup exclusion, muscle attribution and
 its category fallback, rest days as real zeros, ACWR, and source precedence
@@ -85,14 +88,48 @@ unavoidable — the tool schemas and the Gemini wire format are both JSON — an
 hand-rolling a parser for a health app is a worse trade than one Kotlin-first
 library that behaves identically on the JVM and on Android.
 
-**`:app` has never been compiled.** The environment this was written in cannot
-reach Google's Maven repository, so the Android Gradle Plugin, AndroidX and
-Compose could not be resolved, and no `android.jar` was available to compile
-against. Expect the first build in Android Studio to need fixing — most likely
-a dependency version or a Compose API signature. The logic it depends on is
-tested; the glue around it is not.
+**`:app` has never been built by Gradle.** The environment it was written in
+cannot reach Google's Maven repository, so the Android Gradle Plugin, AndroidX
+and Compose could not be resolved and there was no `android.jar` to compile
+against.
 
-Still to port: the Compose UI beyond the dashboard — logging a set, the trends
-charts, the chat screen, and the settings that hold the API key and the watch
-folders. The logic behind all of them is in `core` and tested; what is missing
-is screens.
+It has, however, been **type-checked**. Every Android and Compose API it uses
+was stubbed with the signature it is believed to have, and the whole module was
+compiled against those stubs with kotlinc. That catches typos, missing imports,
+wrong arity, bad named arguments and type errors in the app's own logic — and
+it caught a real one: `var range` generates a `setRange` JVM setter, which
+clashed with a method of the same name.
+
+What it cannot catch is a stub whose signature is wrong, since the stub encodes
+a belief rather than the SDK. So expect the first real build to need something —
+most likely a dependency version or a Compose parameter that has moved. The
+logic underneath is tested; the layout on top is checked but unproven.
+
+The screens deliberately use a small, stable slice of Compose: no icon packs,
+no `Scaffold`, no navigation library, and no text drawn inside a `Canvas`.
+Fewer APIs is less to be wrong about when you cannot compile.
+
+The five screens are Dashboard, Log, Trends, Coach and Settings — the same ones
+the web app has, reading the same views.
+
+## Charts
+
+Three, and no more than the data deserves. Acute against chronic load is two
+lines on **one** y axis, with a legend and the latest value of each labelled
+directly; volume by muscle group is horizontal bars in a single hue, because
+identity is carried by the labels beside them and a colour per bar would be
+decoration pretending to be information; estimated 1RM is one line, so the
+heading names it and there is no legend. Everything else is a stat tile: a
+number you already know the trend of does not need a plot next to it.
+
+The series pair is the web app's, so the two read as one product, and it was
+checked rather than eyeballed — ΔE 26.8 for protanopia, 31.8 for normal vision,
+against this surface. The ACWR band is written as a word as well as coloured,
+because colour alone is not a label and that is the number people misread.
+
+Dark only, on purpose: this is a thing you open in a gym, often late, and a
+white screen there is hostile.
+
+Still to build: importing from the watch folders on a schedule, and the backup
+and restore screens. `core` has all of it; what is missing is the Android
+plumbing — a foreground service and the storage permission.
