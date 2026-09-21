@@ -291,9 +291,16 @@ names the target explicitly (`aarch64-linux-android`, not the
 `aarch64-unknown-linux-android` maturin guesses), and takes Termux's prebuilt
 `cryptography` to skip the largest build.
 
-**Expect this step to be slow** — ten minutes or more, and longer on an older
-phone. If the install is *killed* rather than failing with an error, that was
-the out-of-memory killer:
+**Expect this step to be slow** — `pydantic-core` is the long pole, and on a
+phone it is tens of minutes rather than the seconds it takes on a desktop. It
+is a one-time cost per install, not something you pay on every start.
+
+It is working if `Compiling <crate>` lines keep appearing; cargo prints one per
+crate and there are hundreds. Silence for many minutes with no new line is the
+only thing that means trouble.
+
+If the install is *killed* rather than failing with an error, that was the
+out-of-memory killer:
 
 ```bash
 export CARGO_BUILD_JOBS=1

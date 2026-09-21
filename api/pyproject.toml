@@ -9,7 +9,12 @@ description = "Personal training data warehouse and coaching agent"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
-    "uvicorn[standard]>=0.32",
+    # Not uvicorn[standard]: it adds uvloop, httptools, websockets and
+    # watchfiles, and watchfiles is a Rust build — which on Android means a
+    # toolchain and a long compile for a reload watcher this never uses. The
+    # coach streams over SSE, not WebSockets, and one user on loopback gains
+    # nothing measurable from uvloop.
+    "uvicorn>=0.32",
     "sqlalchemy>=2.0.36",
     "alembic>=1.14",
     "pydantic>=2.9",
