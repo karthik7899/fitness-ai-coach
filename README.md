@@ -42,6 +42,25 @@ never does arithmetic — every figure it quotes comes from a tool call. It can
 also write: `log_set` records a set from chat, and `remember` persists durable
 facts (injuries, goals, constraints) that load into every later conversation.
 
+**The harness** around the coach checks that rule instead of trusting it:
+
+- **Grounding.** Every figure in the final answer is matched against what the
+  tools returned and what the athlete said. Matching respects rounding and
+  units, so "107.5 kg" and "0.1 t" both check out against 107.5.
+- **Retry.** An answer that quotes a figure from nowhere is sent back once,
+  with the offending figures named. If the retry still fails, the answer is
+  shown with a warning listing the unverified figures rather than hidden.
+- **Tracing.** Each answer carries a trace: every model call, tool call and
+  check, with timings and token usage, under "How this was answered".
+- **Evals.** Scenarios in `evals/` grade whole conversations: which tools the
+  coach called, which figures it quoted, and what it changed. CI runs them
+  scripted, in both apps. A manual workflow runs them against the live model
+  and writes a scored report. See `evals/README.md`.
+
+The web and Android coaches implement all of this separately. Shared fixtures
+hold them to the same verdicts: `fixtures/grounding.json` pins the grounding
+check, and `fixtures/prompt_assembly.json` pins the prompt.
+
 The tool specs in `agent/tools.py` are plain JSON Schema and carry no provider
 types; only `agent/coach.py` knows about Gemini, so swapping providers is one
 file.
@@ -192,7 +211,9 @@ api/
     agent/             tool definitions + the coaching loop
     routers/           training, metrics, coach (SSE), sync, settings
   alembic/versions/    0001 tables, 0002 views, 0003 settings, 0004 portability
-scripts/               setup.sh, start.sh, export_schema.py
+scripts/               setup.sh, start.sh, the generators, run_evals.py
+evals/scenarios/       coach eval scenarios, shared by both apps
+fixtures/              golden files both apps are tested against
 android/
   core/                plain Kotlin: schema, metrics queries, tests
   app/                 Android: SQLite handle and Compose UI
@@ -374,7 +395,7 @@ format, a backup from either restores into the other.
 cd api && uv run pytest
 ```
 
-79 tests against a real database built by the real migrations — the SQL views are
+About 170 tests against a real database built by the real migrations — the SQL views are
 exercised, not mocked, since that is where every number the coach quotes comes
 from. Each test runs inside a transaction that is rolled back, so tests never see
 each other's rows.
@@ -395,6 +416,9 @@ multi-device metric precedence, unit conversion on import, import idempotency,
 file identification by content, and the HTTP contract the web app is written
 against.
 
+They also run every eval scenario through the full coach loop, with the model
+scripted. See `evals/README.md`.
+
 Verified by mutation: removing the pounds-to-kilograms conversion, accepting
 implausible heart rates, and widening the e1RM rep guard each fail exactly the
 test that should catch them.
@@ -406,18 +430,16 @@ views, exercise catalogue, strength logging, FitNotes import, the agent tool
 surface, Strava and Health Connect adapters, scheduled sync, backup and restore,
 and the Dashboard / Log / Trends / Coach UI.
 
-Started: the native Android app under `android/`. Its `core` module — the
-schema, every metrics query, both importers, backup verification and the
-coaching loop — is built and tested (`./gradlew :core:test`, 74 tests). The
-schema and the coach's tool surface are generated from this app, and import
-behaviour is pinned by shared fixtures, so the two cannot drift apart. The
-`app` module now has all five screens in Compose — Dashboard, Log, Trends,
-Coach and Settings — but has never been built by Gradle, only type-checked
-against stubbed Android APIs; see `android/README.md`.
+The native Android app under `android/` is built by CI into an installable APK;
+see `android/README.md`. Its `core` module holds the schema, every metrics
+query, both importers, backup verification, and the coaching loop with its
+harness. It is tested with `./gradlew :core:test` (99 tests). The schema, the
+tool surface, the prompt and the correction text are generated from this app,
+and shared fixtures pin import behaviour, the grounding check and the eval
+scenarios, so the two apps cannot drift apart.
 
-Unverified: the request path to Gemini needs a live `GEMINI_API_KEY`. Everything
-it reads is tested, and the tool-schema conversion, stream-part merging and
-history round-trip are covered by `tests/test_agent.py`; the network call is not.
+Both coaches have answered against the live Gemini API. How well they answer is
+what `scripts/run_evals.py` measures.
 
 `uv run python -m app.agent.coach` lists the models your key can actually call,
 if `GEMINI_MODEL` ever needs updating.

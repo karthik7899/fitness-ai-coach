@@ -12,11 +12,13 @@ on:
     paths:
       - "android/**"
       - "fixtures/**"
+      - "evals/**"
       - ".github/workflows/android.yml"
   pull_request:
     paths:
       - "android/**"
       - "fixtures/**"
+      - "evals/**"
   workflow_dispatch:
 
 jobs:

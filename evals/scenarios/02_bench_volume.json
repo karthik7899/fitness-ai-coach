@@ -1,0 +1,22 @@
+{
+  "name": "bench-volume",
+  "about": "A volume question over an explicit window is answered from the volume summary, and the older session outside the window is left out.",
+  "question": "How much bench press volume have I done over the last two weeks?",
+  "seed": {
+    "workouts": [
+      {"day": -20, "sets": [["Bench Press", 57.5, 8], ["Bench Press", 57.5, 8], ["Bench Press", 57.5, 8]]},
+      {"day": -10, "sets": [["Bench Press", 60, 8], ["Bench Press", 60, 8], ["Bench Press", 60, 8]]},
+      {"day": -3, "sets": [["Bench Press", 62.5, 8], ["Bench Press", 62.5, 8], ["Bench Press", 62.5, 8]]}
+    ]
+  },
+  "expect": {
+    "calls": [["get_volume_summary", "get_exercise_history"]],
+    "avoids": ["log_set"],
+    "quotes": [2940],
+    "grounded": true
+  },
+  "script": [
+    {"call": "get_volume_summary", "args": {"start_date": "{today-13}", "end_date": "{today}", "group_by": "exercise"}},
+    {"text": "Bench press came to 2,940 kg of volume across 6 working sets in the last two weeks."}
+  ]
+}

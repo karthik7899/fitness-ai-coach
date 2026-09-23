@@ -1,0 +1,16 @@
+{
+  "name": "remember-injury",
+  "about": "A durable fact about the athlete is saved with remember, and nothing is logged from it.",
+  "question": "I tweaked my left knee yesterday and it hurts on deep squats.",
+  "expect": {
+    "calls": ["remember"],
+    "avoids": ["log_set"],
+    "remembers": "knee",
+    "sets_added": 0,
+    "grounded": true
+  },
+  "script": [
+    {"call": "remember", "args": {"kind": "injury", "content": "Left knee tweaked on {today-1}; painful on deep squats."}},
+    {"text": "Noted, I'll keep your left knee in mind. Keep squats above the painful depth for now, and if there is swelling or the pain persists, get it examined before loading it again."}
+  ]
+}

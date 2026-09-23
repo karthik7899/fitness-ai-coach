@@ -1,0 +1,20 @@
+{
+  "name": "missing-hrv",
+  "about": "Asked about data that does not exist, the coach looks, then says it is missing instead of inventing a trend.",
+  "question": "What's my HRV trend over the last month?",
+  "seed": {
+    "daily_metrics": [
+      {"day": -1, "metric": "steps", "value": 8200, "unit": "count"}
+    ]
+  },
+  "expect": {
+    "calls": ["get_daily_metrics"],
+    "avoids": ["log_set"],
+    "grounded": true,
+    "says": [["no hrv", "not any hrv", "no heart rate variability", "no data", "no readings", "don't have", "do not have", "doesn't have", "isn't any", "there is no", "there's no", "not recorded", "no recorded", "missing"]]
+  },
+  "script": [
+    {"call": "get_daily_metrics", "args": {"start_date": "{today-28}", "end_date": "{today}", "metrics": ["hrv_ms"]}},
+    {"text": "There is no HRV data recorded for the last month, so there is no trend to read. If your watch measures it, import a fresh Gadgetbridge export and ask again."}
+  ]
+}

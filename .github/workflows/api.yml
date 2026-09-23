@@ -1,0 +1,76 @@
+name: API
+
+# The Python app's own checks: lint, the generated files both apps read, and
+# the whole test suite on both databases — which includes the eval scenarios
+# with the model scripted. The Kotlin side of the same scenarios runs in
+# android.yml.
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths:
+      - "api/**"
+      - "scripts/**"
+      - "fixtures/**"
+      - "evals/**"
+      - "android/core/src/main/resources/aura/**"
+      - ".github/workflows/api.yml"
+  pull_request:
+    paths:
+      - "api/**"
+      - "scripts/**"
+      - "fixtures/**"
+      - "evals/**"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dialect: [sqlite, postgresql]
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: aura
+          POSTGRES_PASSWORD: aura
+          POSTGRES_DB: aura
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aura"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+
+      - name: Install
+        run: uv sync --extra binary
+
+      - name: Lint
+        run: uv run ruff check . ../scripts
+
+      - name: Generated files are current
+        run: |
+          uv run python ../scripts/export_schema.py --check
+          uv run python ../scripts/export_tools.py --check
+          uv run python ../scripts/refresh_fixtures.py --check
+
+      - name: Tests (${{ matrix.dialect }})
+        env:
+          TEST_DIALECT: ${{ matrix.dialect }}
+        run: uv run pytest -q

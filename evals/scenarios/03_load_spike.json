@@ -1,0 +1,25 @@
+{
+  "name": "load-spike",
+  "about": "A question about ramping load is answered from the training-load view, quoting the acute:chronic ratio rather than a general rule of thumb.",
+  "question": "Am I ramping up my training load too fast?",
+  "seed": {
+    "workouts": [
+      {"day": -27, "sets": [["Back Squat", 80, 5], ["Back Squat", 80, 5], ["Back Squat", 80, 5]]},
+      {"day": -20, "sets": [["Back Squat", 80, 5], ["Back Squat", 80, 5], ["Back Squat", 80, 5]]},
+      {"day": -13, "sets": [["Back Squat", 85, 5], ["Back Squat", 85, 5], ["Back Squat", 85, 5]]},
+      {"day": -5, "sets": [["Back Squat", 100, 5], ["Back Squat", 100, 5], ["Back Squat", 100, 5], ["Back Squat", 100, 5], ["Back Squat", 100, 5]]},
+      {"day": -3, "sets": [["Back Squat", 100, 5], ["Back Squat", 100, 5], ["Back Squat", 100, 5], ["Back Squat", 100, 5], ["Back Squat", 100, 5]]},
+      {"day": -1, "sets": [["Back Squat", 100, 5], ["Back Squat", 100, 5], ["Back Squat", 100, 5], ["Back Squat", 100, 5], ["Back Squat", 100, 5]]}
+    ]
+  },
+  "expect": {
+    "calls": ["get_training_load"],
+    "avoids": ["log_set"],
+    "quotes": [2.685],
+    "grounded": true
+  },
+  "script": [
+    {"call": "get_training_load", "args": {"start_date": "{today-6}", "end_date": "{today}"}},
+    {"text": "Yes, sharply. Your acute:chronic workload ratio is 2.685 today, up from 1.619 on {today-5}, and anything above about 1.5 is a spike relative to what you have been doing. Hold this week's load rather than adding to it."}
+  ]
+}

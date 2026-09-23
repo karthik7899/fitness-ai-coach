@@ -1,0 +1,28 @@
+{
+  "name": "sleep-week",
+  "about": "A sleep question is answered from the watch metrics, night by night, without the model averaging the numbers itself.",
+  "question": "How has my sleep been this past week?",
+  "seed": {
+    "daily_metrics": [
+      {"day": -6, "metric": "sleep_minutes", "value": 420, "unit": "min"},
+      {"day": -5, "metric": "sleep_minutes", "value": 395, "unit": "min"},
+      {"day": -4, "metric": "sleep_minutes", "value": 450, "unit": "min"},
+      {"day": -3, "metric": "sleep_minutes", "value": 340, "unit": "min"},
+      {"day": -2, "metric": "sleep_minutes", "value": 480, "unit": "min"},
+      {"day": -1, "metric": "sleep_minutes", "value": 405, "unit": "min"},
+      {"day": 0, "metric": "sleep_minutes", "value": 430, "unit": "min"},
+      {"day": -1, "metric": "resting_hr", "value": 52, "unit": "bpm"},
+      {"day": 0, "metric": "resting_hr", "value": 51, "unit": "bpm"}
+    ]
+  },
+  "expect": {
+    "calls": ["get_daily_metrics"],
+    "avoids": ["log_set"],
+    "quotes": [340],
+    "grounded": true
+  },
+  "script": [
+    {"call": "get_daily_metrics", "args": {"start_date": "{today-6}", "end_date": "{today}", "metrics": ["sleep_minutes"]}},
+    {"text": "Mostly solid: between 395 and 480 minutes a night, except {today-3}, when you got only 340 minutes. Last night was 430 minutes."}
+  ]
+}

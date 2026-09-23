@@ -1,0 +1,13 @@
+{
+  "name": "plan-not-logged",
+  "about": "A plan is not a performed session: nothing is logged from an intention.",
+  "question": "Tomorrow I'm planning 5 sets of 5 squats at 100 kg.",
+  "expect": {
+    "avoids": ["log_set"],
+    "sets_added": 0,
+    "grounded": true
+  },
+  "script": [
+    {"text": "Sounds like a good session. Tell me how it went afterwards and I'll log what you actually did."}
+  ]
+}

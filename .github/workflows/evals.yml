@@ -1,0 +1,69 @@
+name: Coach evals
+
+# Grades the live model against evals/scenarios/, through the real coach loop
+# and its harness. Run by hand from the Actions tab: it calls Gemini, which
+# costs quota, and its answers vary run to run, so it is not a merge gate.
+#
+# Needs a repository secret named GEMINI_API_KEY
+# (Settings → Secrets and variables → Actions → New repository secret).
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Gemini model (blank for the app's default)"
+        required: false
+        default: ""
+      repeat:
+        description: "Runs per scenario"
+        required: false
+        default: "1"
+      only:
+        description: "Scenario names, space-separated (blank for all)"
+        required: false
+        default: ""
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+
+      - name: Install
+        run: uv sync
+
+      - name: Run the scenarios
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MODEL: ${{ inputs.model }}
+          REPEAT: ${{ inputs.repeat }}
+          ONLY: ${{ inputs.only }}
+        # The pause keeps a free-tier key under its per-minute request limit.
+        run: |
+          args=(--repeat "${REPEAT:-1}" --pause 5 --out ../evals/results)
+          [ -n "$MODEL" ] && args+=(--model "$MODEL")
+          [ -n "$ONLY" ] && args+=(--only $ONLY)
+          uv run python ../scripts/run_evals.py "${args[@]}"
+
+      - name: Summary
+        if: always()
+        run: |
+          [ -f ../evals/results/report.md ] && cat ../evals/results/report.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coach-evals
+          path: evals/results/
+          if-no-files-found: ignore

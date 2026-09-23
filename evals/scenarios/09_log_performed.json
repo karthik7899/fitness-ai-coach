@@ -1,0 +1,18 @@
+{
+  "name": "log-performed",
+  "about": "Sets the athlete says they did are logged, one per set, with the load and reps they gave.",
+  "question": "I just did 3 sets of 8 on bench press at 60 kg.",
+  "expect": {
+    "calls": ["log_set"],
+    "sets_added": 3,
+    "grounded": true
+  },
+  "script": [
+    {"calls": [
+      {"name": "log_set", "args": {"exercise": "Bench Press", "reps": 8, "weight_kg": 60}},
+      {"name": "log_set", "args": {"exercise": "Bench Press", "reps": 8, "weight_kg": 60}},
+      {"name": "log_set", "args": {"exercise": "Bench Press", "reps": 8, "weight_kg": 60}}
+    ]},
+    {"text": "Logged 3 sets of 8 at 60 kg on bench press for today."}
+  ]
+}

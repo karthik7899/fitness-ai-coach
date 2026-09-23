@@ -236,7 +236,7 @@ def _usage(metadata) -> dict:
 
 
 async def stream_turn(
-    session: Session, conversation: Conversation, user_text: str
+    session: Session, conversation: Conversation, user_text: str, client=None
 ) -> AsyncIterator[dict]:
     """Run one user turn to completion, yielding SSE payloads as it goes.
 
@@ -246,8 +246,10 @@ async def stream_turn(
     arrive, an answer that gets sent back has already been shown — so a
     `retry` event tells the page to replace it, rather than the correction
     happening out of sight.
+
+    `client` stands in for the Gemini client; the evals pass a scripted one.
     """
-    client = _client(session)
+    client = client or _client(session)
     model, _ = settings_store.gemini_model(session)
     started = time.perf_counter()
     steps: list[dict] = []

@@ -34,6 +34,13 @@ tasks.test {
     useJUnitPlatform()
     testLogging { events("failed") }
     // The import fixtures are shared with the Python suite and live outside
-    // this build, at the repository root.
-    systemProperty("aura.fixtures", rootProject.file("../fixtures").absolutePath)
+    // this build, at the repository root. So are the eval scenarios; see
+    // EvalTest. Both are declared as inputs, or Gradle would call the tests
+    // up to date after an edit to either and not run them.
+    val fixtures = rootProject.file("../fixtures")
+    val scenarios = rootProject.file("../evals/scenarios")
+    inputs.dir(fixtures).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(scenarios).withPathSensitivity(PathSensitivity.RELATIVE)
+    systemProperty("aura.fixtures", fixtures.absolutePath)
+    systemProperty("aura.evals", scenarios.absolutePath)
 }

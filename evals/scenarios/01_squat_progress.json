@@ -1,0 +1,23 @@
+{
+  "name": "squat-progress",
+  "about": "A progress question is answered from the exercise history, quoting the real top sets from the start and end of the block.",
+  "question": "How has my back squat moved over the last month?",
+  "seed": {
+    "workouts": [
+      {"day": -21, "sets": [["Back Squat", 60, 5, true], ["Back Squat", 100, 5], ["Back Squat", 100, 5], ["Back Squat", 100, 5]]},
+      {"day": -14, "sets": [["Back Squat", 102.5, 5], ["Back Squat", 102.5, 5], ["Back Squat", 102.5, 5]]},
+      {"day": -7, "sets": [["Back Squat", 105, 5], ["Back Squat", 105, 5], ["Back Squat", 105, 5]]},
+      {"day": -2, "sets": [["Back Squat", 107.5, 5], ["Back Squat", 107.5, 5], ["Back Squat", 107.5, 5]]}
+    ]
+  },
+  "expect": {
+    "calls": ["get_exercise_history"],
+    "avoids": ["log_set"],
+    "quotes": [100, 107.5],
+    "grounded": true
+  },
+  "script": [
+    {"call": "get_exercise_history", "args": {"exercise": "Back Squat"}},
+    {"text": "Your top working set has climbed every week: 100 kg on {today-21}, then 102.5 kg, 105 kg, and 107.5 kg on {today-2}. The reps held at every step, so keep adding load."}
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "name": "standing-injury",
+  "about": "A remembered injury reaches the prompt and shapes the advice, without the athlete mentioning it again.",
+  "question": "What should I do for my upper body session today?",
+  "seed": {
+    "notes": [
+      {"kind": "injury", "content": "Left shoulder impingement; avoid overhead pressing."}
+    ],
+    "workouts": [
+      {"day": -3, "sets": [["Bench Press", 60, 8], ["Bench Press", 60, 8], ["Bench Press", 60, 8]]}
+    ]
+  },
+  "expect": {
+    "avoids": ["log_set"],
+    "grounded": true,
+    "says": [["shoulder", "impingement", "overhead"]]
+  },
+  "script": [
+    {"call": "get_exercise_history", "args": {"exercise": "Bench Press"}},
+    {"text": "Given your left shoulder impingement, skip overhead pressing today. Bench again at 60 kg with a controlled descent, then rows, and stop any movement that pinches."}
+  ]
+}
