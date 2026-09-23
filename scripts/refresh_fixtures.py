@@ -111,8 +111,16 @@ GROUNDING_CASES = [
     ("1RM is a name, not a figure", "Your e1RM rose to 120.", ['{"best": 120}']),
     ("the load windows are definitional", "Your 7-day and 28-day averages.", []),
     ("echoing the question", "Over the last 30 days you trained twice.", ["Last 30 days?"]),
-    ("arithmetic is reported, by design", "300 kg more than last week.", ['{"a": 1500, "b": 1200}']),
-    ("list markers are not figures", "1. Squat 4x5 at 100 kg", ['{"sets": 4, "reps": 5, "w": 100}']),
+    (
+        "arithmetic is reported, by design",
+        "300 kg more than last week.",
+        ['{"a": 1500, "b": 1200}'],
+    ),
+    (
+        "list markers are not figures",
+        "1. Squat 4x5 at 100 kg",
+        ['{"sets": 4, "reps": 5, "w": 100}'],
+    ),
     ("nothing to check", "Rest today.", []),
     ("each figure once", "5 sets, then 5 more sets.", ['{"sets": 5}']),
 ]
