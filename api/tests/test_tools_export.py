@@ -14,7 +14,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from export_tools import PROMPT_TARGET, TARGET, build, build_prompt, outputs  # noqa: E402
+from export_tools import PROMPT_TARGET, build, build_prompt, outputs  # noqa: E402
 
 from app.agent.tools import HANDLERS, TOOL_SPECS  # noqa: E402
 
