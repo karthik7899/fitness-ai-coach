@@ -43,11 +43,18 @@ class Conversation internal constructor(internal val contents: List<JsonObject>)
     }
 }
 
-/** The end of one exchange: what to show, and the conversation to carry forward. */
+/**
+ * The end of one exchange: what to show, the conversation to carry forward,
+ * whether its figures checked out, and how it was arrived at.
+ */
 data class Answer(
     val text: String,
     val toolCalls: List<ToolCall>,
     val conversation: Conversation,
+    val grounding: Grounding = Grounding.NOTHING_TO_CHECK,
+    val trace: Trace = Trace.EMPTY,
+    /** Whether the first answer quoted figures nothing returned, and was sent back. */
+    val retried: Boolean = false,
 )
 
 /** Anything that can POST JSON and return JSON. Injected so the loop is testable. */
@@ -75,22 +82,39 @@ class Coach(
     private val transport: Transport = HttpTransport(),
     private val maxRounds: Int = 12,
     private val today: () -> LocalDate = { LocalDate.now() },
+    private val clock: () -> Long = { System.nanoTime() },
 ) {
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+    private fun millisSince(start: Long): Long = (clock() - start) / 1_000_000
 
     fun ask(message: String, conversation: Conversation = Conversation.EMPTY): Answer {
         if (apiKey.isBlank()) {
             throw CoachError("No Gemini API key set. Add one in Settings.")
         }
 
+        val started = clock()
         val contents = conversation.contents.toMutableList()
         contents += userContent(message)
         val calls = mutableListOf<ToolCall>()
+        val steps = mutableListOf<TraceStep>()
+        var usage = Usage()
+        var retried = false
 
         repeat(maxRounds) {
+            val callStarted = clock()
             val response = json.parseToJsonElement(send(contents)).jsonObject
             rejectError(response)
+            val spent = usageOf(response)
+            usage += spent
+            steps +=
+                TraceStep(
+                    TraceStep.Kind.MODEL,
+                    model,
+                    if (spent.totalTokens > 0) "${spent.totalTokens} tokens" else "",
+                    millisSince(callStarted),
+                )
 
             val parts = firstCandidateParts(response)
             if (parts.isEmpty()) {
@@ -109,10 +133,40 @@ class Coach(
                 val text =
                     parts.mapNotNull { it.jsonObject["text"]?.jsonPrimitive?.content }
                         .joinToString("")
+
+                val checkStarted = clock()
+                val grounding = GroundingCheck.check(text, sourcesIn(contents))
+                steps +=
+                    TraceStep(
+                        TraceStep.Kind.CHECK,
+                        "grounding",
+                        describe(grounding),
+                        millisSince(checkStarted),
+                        failed = !grounding.ok,
+                    )
+
+                // One chance to correct itself. More would let a model that
+                // cannot find a figure burn the round budget looking for it.
+                if (!grounding.ok && !retried) {
+                    retried = true
+                    steps +=
+                        TraceStep(
+                            TraceStep.Kind.RETRY,
+                            "sent back",
+                            grounding.unverified.joinToString(", "),
+                            0,
+                        )
+                    contents += userContent(correction(grounding))
+                    return@repeat
+                }
+
                 return Answer(
                     text = text,
                     toolCalls = calls,
                     conversation = Conversation(contents.toList()),
+                    grounding = grounding,
+                    trace = Trace(steps.toList(), usage, millisSince(started)),
+                    retried = retried,
                 )
             }
 
@@ -120,7 +174,16 @@ class Coach(
                 for (call in requested) {
                     val name = call["name"]!!.jsonPrimitive.content
                     val arguments = call["args"]?.jsonObject ?: JsonObject(emptyMap())
+                    val toolStarted = clock()
                     val result = runTool(name, arguments)
+                    steps +=
+                        TraceStep(
+                            TraceStep.Kind.TOOL,
+                            name,
+                            summarise(arguments),
+                            millisSince(toolStarted),
+                            failed = result.containsKey("error"),
+                        )
                     calls += ToolCall(name, arguments, result)
                     add(
                         buildJsonObject {
@@ -139,6 +202,63 @@ class Coach(
         }
 
         throw CoachError("The coach kept calling tools without answering. Try a narrower question.")
+    }
+
+    /**
+     * What the model's figures may legitimately come from: what the tools
+     * returned and what the athlete said, anywhere in this conversation.
+     *
+     * Not the model's own earlier words — they are not evidence. And not the
+     * corrections this harness sends: they quote the unverified figures back,
+     * and counting them would let a retry verify itself by repetition.
+     */
+    private fun sourcesIn(contents: List<JsonObject>): List<String> =
+        contents
+            .filter { it["role"]?.jsonPrimitive?.content == "user" }
+            .flatMap { content ->
+                content["parts"]?.jsonArray.orEmpty().mapNotNull { part ->
+                    val obj = part.jsonObject
+                    val text = obj["text"]?.jsonPrimitive?.content
+                    when {
+                        text != null && !text.startsWith(CORRECTION_PREFIX) -> text
+                        obj["functionResponse"] != null -> obj["functionResponse"].toString()
+                        else -> null
+                    }
+                }
+            }
+
+    private fun correction(grounding: Grounding): String =
+        CORRECTION_PREFIX +
+            "Your answer quoted ${grounding.unverified.joinToString(", ")}, which no tool " +
+            "returned in this conversation and the athlete did not say. Call a tool that " +
+            "returns them, or rewrite the answer without them. Do not estimate, recall or " +
+            "compute figures."
+
+    private fun describe(grounding: Grounding): String {
+        val total = grounding.verified.size + grounding.unverified.size
+        return when {
+            total == 0 -> "no figures to check"
+            grounding.ok -> "$total of $total traced"
+            else ->
+                "${grounding.unverified.size} of $total not found: " +
+                    grounding.unverified.joinToString(", ")
+        }
+    }
+
+    private fun summarise(arguments: JsonObject): String =
+        arguments.entries.joinToString(", ") { (key, value) ->
+            val shown = (value as? JsonPrimitive)?.content ?: value.toString()
+            "$key=$shown"
+        }
+
+    private fun usageOf(response: JsonObject): Usage {
+        val meta = response["usageMetadata"]?.jsonObject ?: return Usage()
+        fun count(key: String) = meta[key]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+        return Usage(
+            count("promptTokenCount"),
+            count("candidatesTokenCount"),
+            count("totalTokenCount"),
+        )
     }
 
     /**
@@ -203,6 +323,9 @@ class Coach(
     companion object {
         const val ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"
         const val DEFAULT_MODEL = "gemini-3.8-flash"
+
+        /** Marks a message the harness sent, so it is never mistaken for evidence. */
+        const val CORRECTION_PREFIX = "[Grounding check] "
 
     }
 }

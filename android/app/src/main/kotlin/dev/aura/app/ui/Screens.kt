@@ -31,6 +31,9 @@ import dev.aura.app.AuraState
 import dev.aura.app.BuildConfig
 import dev.aura.app.Tab
 import dev.aura.app.ChatTurn
+import dev.aura.core.agent.Grounding
+import dev.aura.core.agent.Trace
+import dev.aura.core.agent.TraceStep
 import dev.aura.core.presentation.DashboardState
 import dev.aura.core.presentation.Format
 import dev.aura.core.presentation.LoadBand
@@ -356,6 +359,8 @@ fun CoachScreen(app: AuraState) {
 
 @Composable
 private fun ChatBubble(turn: ChatTurn) {
+    var showTrace by remember { mutableStateOf(false) }
+
     Panel {
         Text(
             if (turn.fromUser) "You" else "Coach",
@@ -363,18 +368,88 @@ private fun ChatBubble(turn: ChatTurn) {
             style = MaterialTheme.typography.labelMedium,
         )
         Text(turn.text, color = AuraColors.Text, modifier = Modifier.padding(top = 4.dp))
-        if (turn.toolsUsed.isNotEmpty()) {
-            // Worth showing: it is the difference between an answer read out of
-            // the database and one the model made up.
-            Text(
-                "read ${turn.toolsUsed.joinToString(", ")}",
-                color = AuraColors.Muted,
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.padding(top = 4.dp),
-            )
+
+        turn.grounding?.let { Verdict(it, turn.retried) }
+
+        val trace = turn.trace
+        if (trace != null && trace.steps.isNotEmpty()) {
+            TextButton(onClick = { showTrace = !showTrace }) {
+                Text(
+                    if (showTrace) "Hide how this was answered" else "How this was answered",
+                    color = AuraColors.Muted,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+            if (showTrace) TraceView(trace)
         }
     }
 }
+
+/**
+ * Whether the answer's figures were found in the athlete's data.
+ *
+ * Worded as well as coloured — colour alone is not a label — and specific
+ * about which figures failed, because "something may be wrong" is not
+ * something anyone can act on.
+ */
+@Composable
+private fun Verdict(grounding: Grounding, retried: Boolean) {
+    val total = grounding.verified.size + grounding.unverified.size
+    if (total == 0) return
+    val (line, color) =
+        if (grounding.ok) {
+            val correction = if (retried) ", after one correction" else ""
+            "✓ All $total figure${if (total == 1) "" else "s"} found in your data$correction" to
+                AuraColors.StatusGood
+        } else {
+            "⚠ Not found in your data: ${grounding.unverified.joinToString(", ")}" to
+                AuraColors.StatusWarning
+        }
+    Text(
+        line,
+        color = color,
+        style = MaterialTheme.typography.labelMedium,
+        modifier = Modifier.padding(top = 6.dp),
+    )
+}
+
+@Composable
+private fun TraceView(trace: Trace) {
+    Column(modifier = Modifier.padding(top = 2.dp)) {
+        for (step in trace.steps) {
+            val kind =
+                when (step.kind) {
+                    TraceStep.Kind.MODEL -> "model"
+                    TraceStep.Kind.TOOL -> "tool"
+                    TraceStep.Kind.CHECK -> "check"
+                    TraceStep.Kind.RETRY -> "retry"
+                }
+            val parts = listOf(kind, step.label, step.detail, duration(step.millis))
+                .filter { it.isNotBlank() }
+            Text(
+                parts.joinToString(" · ") + if (step.failed) "  (failed)" else "",
+                color = if (step.failed) AuraColors.StatusWarning else AuraColors.Muted,
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+        val totals =
+            buildList {
+                add("${trace.modelCalls} model call${if (trace.modelCalls == 1) "" else "s"}")
+                add("${trace.toolCalls} tool call${if (trace.toolCalls == 1) "" else "s"}")
+                if (trace.usage.totalTokens > 0) add("${Format.number(trace.usage.totalTokens.toDouble())} tokens")
+                add(duration(trace.totalMillis))
+            }
+        Text(
+            totals.joinToString(" · "),
+            color = AuraColors.Text,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+private fun duration(millis: Long): String =
+    if (millis < 1000) "$millis ms" else Format.number(millis / 1000.0, 1) + " s"
 
 // --------------------------------------------------------------------------
 

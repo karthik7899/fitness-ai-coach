@@ -9,6 +9,8 @@ import dev.aura.core.Settings
 import dev.aura.core.agent.Coach
 import dev.aura.core.agent.CoachError
 import dev.aura.core.agent.Conversation
+import dev.aura.core.agent.Grounding
+import dev.aura.core.agent.Trace
 import dev.aura.core.imports.FileKind
 import dev.aura.core.imports.Inbox
 import dev.aura.core.presentation.DashboardState
@@ -31,7 +33,13 @@ enum class Tab(val label: String) {
     SETTINGS("Settings"),
 }
 
-data class ChatTurn(val fromUser: Boolean, val text: String, val toolsUsed: List<String> = emptyList())
+data class ChatTurn(
+    val fromUser: Boolean,
+    val text: String,
+    val grounding: Grounding? = null,
+    val trace: Trace? = null,
+    val retried: Boolean = false,
+)
 
 /**
  * Everything the screens read and write, held in one place.
@@ -180,7 +188,9 @@ class AuraState(
                         ChatTurn(
                             fromUser = false,
                             text = answer.text,
-                            toolsUsed = answer.toolCalls.map { it.name }.distinct(),
+                            grounding = answer.grounding,
+                            trace = answer.trace,
+                            retried = answer.retried,
                         )
             } catch (e: CoachError) {
                 chatError = e.message
