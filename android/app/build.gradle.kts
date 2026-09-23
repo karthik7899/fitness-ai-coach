@@ -4,6 +4,12 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// Every build gets a distinct identity. A hardcoded version means the phone
+// cannot tell you which APK it is running, which is exactly the question you
+// ask when something works and you want to keep it.
+val ciBuild: Int = (System.getenv("GITHUB_RUN_NUMBER") ?: "0").toIntOrNull() ?: 0
+val commit: String = (System.getenv("GITHUB_SHA") ?: "").take(7).ifEmpty { "local" }
+
 android {
     namespace = "dev.aura.app"
     compileSdk = 35
@@ -12,11 +18,19 @@ android {
         applicationId = "dev.aura.app"
         minSdk = 26 // java.time without desugaring
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1"
+        // versionCode must increase for an upgrade to install, so CI's run
+        // number drives it. A local build stays at 1 and says "local".
+        versionCode = if (ciBuild > 0) ciBuild else 1
+        versionName = if (ciBuild > 0) "0.1.$ciBuild+$commit" else "0.1-local"
     }
 
-    buildFeatures { compose = true }
+    // buildConfig so the app can show its own version on the Settings screen;
+    // digging through Android's app info to answer "which build is this" is a
+    // poor substitute.
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

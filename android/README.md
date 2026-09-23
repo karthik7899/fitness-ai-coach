@@ -72,6 +72,18 @@ behaviour is pinned the same way by `fixtures/` — see `fixtures/README.md`.
 `core` therefore holds handlers, queries and the coaching loop, but almost no
 declarations.
 
+## Which build am I running?
+
+**Settings → This build**, inside the app. It shows something like
+`0.1.12+95cf258` — the CI run number, then the commit it was built from. That
+commit is the useful half: it is what pins down exactly what is installed when
+something misbehaves.
+
+Builds from CI take their `versionCode` from the run number, so each one
+installs over the last. A build made locally is `0.1-local` with code 1, which
+Android will refuse to install over a CI build — uninstall first if you want to
+go back to a local one.
+
 ## Permissions
 
 `INTERNET`, and nothing else. The coach calls Gemini over HTTPS and Android

@@ -26,6 +26,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.aura.app.AuraState
+import dev.aura.app.BuildConfig
 import dev.aura.app.Tab
 import dev.aura.app.ChatTurn
 import dev.aura.core.presentation.DashboardState
@@ -445,6 +446,19 @@ fun SettingsScreen(state: SettingsState?, app: AuraState) {
         )
         Button(onClick = { app.saveWatchFolders(folders.lines()) }, enabled = !app.busy) {
             Text("Save folders")
+        }
+
+        SectionTitle("This build")
+        Panel {
+            // The version name carries the commit it was built from, which is
+            // what identifies a build when reporting that something broke.
+            Text(BuildConfig.VERSION_NAME, color = AuraColors.Text)
+            Text(
+                "build ${BuildConfig.VERSION_CODE}",
+                color = AuraColors.Muted,
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(top = 2.dp),
+            )
         }
 
         SectionTitle("Database")
