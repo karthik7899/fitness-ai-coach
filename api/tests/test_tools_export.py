@@ -14,17 +14,25 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from export_tools import TARGET, build  # noqa: E402
+from export_tools import PROMPT_TARGET, TARGET, build, build_prompt, outputs  # noqa: E402
 
 from app.agent.tools import HANDLERS, TOOL_SPECS  # noqa: E402
 
 
-def test_the_exported_tool_surface_is_current():
-    assert TARGET.exists(), f"{TARGET} is missing. Run scripts/export_tools.py."
-    assert TARGET.read_text() == build(), (
-        f"{TARGET.relative_to(REPO_ROOT)} is out of date. Run "
-        "`uv run python ../scripts/export_tools.py` — the Android coach reads this file."
-    )
+def test_the_exported_coach_contract_is_current():
+    """Tools and system prompt both: the Android coach reads these files."""
+    stale = [
+        path.relative_to(REPO_ROOT)
+        for path, text in outputs().items()
+        if not path.exists() or path.read_text() != text
+    ]
+    assert stale == [], f"Stale: {stale}. Run `uv run python ../scripts/export_tools.py`."
+
+
+def test_the_exported_prompt_is_the_one_the_python_coach_sends():
+    from app.agent.coach import SYSTEM_INSTRUCTIONS
+
+    assert PROMPT_TARGET.read_text() == SYSTEM_INSTRUCTIONS == build_prompt()
 
 
 def test_every_declared_tool_has_a_handler():

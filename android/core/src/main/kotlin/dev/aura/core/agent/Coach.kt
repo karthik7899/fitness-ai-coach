@@ -4,6 +4,7 @@ import dev.aura.core.Db
 import java.io.BufferedReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.time.LocalDate
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -72,7 +73,8 @@ class Coach(
     private val apiKey: String,
     private val model: String = DEFAULT_MODEL,
     private val transport: Transport = HttpTransport(),
-    private val maxRounds: Int = 8,
+    private val maxRounds: Int = 12,
+    private val today: () -> LocalDate = { LocalDate.now() },
 ) {
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -159,7 +161,9 @@ class Coach(
                 add(buildJsonObject { put("functionDeclarations", JsonArray(Tools.declarations())) })
             }
             putJsonObject("systemInstruction") {
-                putJsonArray("parts") { add(buildJsonObject { put("text", SYSTEM_PROMPT) }) }
+                putJsonArray("parts") {
+                    add(buildJsonObject { put("text", Prompt.forToday(db, today())) })
+                }
             }
         }
         return transport.post("$ENDPOINT/$model:generateContent?key=$apiKey", body.toString())
@@ -200,16 +204,6 @@ class Coach(
         const val ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"
         const val DEFAULT_MODEL = "gemini-3.8-flash"
 
-        val SYSTEM_PROMPT =
-            """
-            You are a strength and conditioning coach with direct access to this
-            athlete's training database. Call the tools for every number you
-            quote — never estimate, never compute in your head, and never invent
-            a figure the tools did not return. If the data does not answer the
-            question, say so. Weights are kilograms, distances metres, durations
-            seconds. Be concise and specific.
-            """
-                .trimIndent()
     }
 }
 

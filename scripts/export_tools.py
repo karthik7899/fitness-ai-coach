@@ -22,6 +22,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 API_DIR = REPO_ROOT / "api"
 TARGET = REPO_ROOT / "android/core/src/main/resources/aura/tools.json"
+PROMPT_TARGET = REPO_ROOT / "android/core/src/main/resources/aura/system_prompt.txt"
 
 sys.path.insert(0, str(API_DIR))
 
@@ -44,24 +45,39 @@ def build() -> str:
     return json.dumps(document, indent=2, sort_keys=False) + "\n"
 
 
+def build_prompt() -> str:
+    """The coach's instructions, exactly as the Python coach sends them.
+
+    Exported for the same reason as the tools: two apps phrasing the brief
+    differently are two coaches, and an eval run against one says nothing about
+    the other. The date and remembered facts are appended at call time, by the
+    same rules on both sides.
+    """
+    from app.agent.coach import SYSTEM_INSTRUCTIONS
+
+    return SYSTEM_INSTRUCTIONS
+
+
+def outputs() -> dict[Path, str]:
+    return {TARGET: build(), PROMPT_TARGET: build_prompt()}
+
+
 def main() -> int:
-    generated = build()
+    produced = outputs()
     if "--check" in sys.argv:
-        current = TARGET.read_text() if TARGET.exists() else ""
-        if current == generated:
-            print(f"{TARGET.relative_to(REPO_ROOT)} is up to date.")
+        stale = [p for p, text in produced.items() if not p.exists() or p.read_text() != text]
+        if not stale:
+            print("Tool surface and system prompt are up to date.")
             return 0
-        print(
-            f"{TARGET.relative_to(REPO_ROOT)} is stale. "
-            "Run: uv run python ../scripts/export_tools.py",
-            file=sys.stderr,
-        )
+        for path in stale:
+            print(f"{path.relative_to(REPO_ROOT)} is stale.", file=sys.stderr)
+        print("Run: uv run python ../scripts/export_tools.py", file=sys.stderr)
         return 1
 
-    TARGET.parent.mkdir(parents=True, exist_ok=True)
-    TARGET.write_text(generated)
-    count = len(json.loads(generated)["tools"])
-    print(f"Wrote {TARGET.relative_to(REPO_ROOT)} ({count} tools).")
+    for path, text in produced.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+        print(f"Wrote {path.relative_to(REPO_ROOT)}.")
     return 0
 
 

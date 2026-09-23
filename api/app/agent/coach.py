@@ -69,18 +69,40 @@ def declarations() -> list[types.FunctionDeclaration]:
     ]
 
 
-def _system_instruction(session: Session) -> str:
-    notes = session.scalars(
-        select(CoachNote).where(CoachNote.is_active.is_(True)).order_by(CoachNote.kind)
-    ).all()
+def build_system_instruction(
+    instructions: str, today: dt.date, notes: list[tuple[str, str]]
+) -> str:
+    """The prompt the model sees: the instructions, today's date, remembered facts.
 
-    context = [SYSTEM_INSTRUCTIONS, f"\nToday is {dt.date.today().isoformat()}."]
+    Pure, so the Android coach can be held to produce exactly the same text —
+    the shared fixture in fixtures/prompt_assembly.json is what enforces it.
+    Today's date is not decoration: without it "this week" leaves the model
+    guessing which dates to query.
+    """
+    context = [instructions, f"\nToday is {today.isoformat()}."]
     if notes:
         context.append("\nStanding facts about this athlete:")
-        context.extend(f"- ({n.kind}) {n.content}" for n in notes)
+        context.extend(f"- ({kind}) {content}" for kind, content in notes)
     else:
         context.append("\nNo standing facts recorded for this athlete yet.")
     return "\n".join(context)
+
+
+def standing_facts(session: Session) -> list[tuple[str, str]]:
+    # Ordered by kind then id, so the prompt is the same text on every call and
+    # in both apps. Kind alone left ties in whatever order the database chose.
+    notes = session.scalars(
+        select(CoachNote)
+        .where(CoachNote.is_active.is_(True))
+        .order_by(CoachNote.kind, CoachNote.id)
+    ).all()
+    return [(n.kind, n.content) for n in notes]
+
+
+def _system_instruction(session: Session) -> str:
+    return build_system_instruction(
+        SYSTEM_INSTRUCTIONS, dt.date.today(), standing_facts(session)
+    )
 
 
 def _load_history(session: Session, conversation_id: int) -> list[types.Content]:
