@@ -1,11 +1,60 @@
 import { type FormEvent, useRef, useState } from "react";
 
-import { streamChat } from "../api";
+import { type Grounding, type Trace, streamChat } from "../api";
 
 interface Turn {
   role: "user" | "assistant";
   text: string;
   tools: string[];
+  correcting?: string[];
+  grounding?: Grounding;
+  trace?: Trace;
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+const duration = (millis: number) =>
+  millis < 1000 ? `${millis} ms` : `${(millis / 1000).toFixed(1)} s`;
+
+function Verdict({ grounding }: { grounding: Grounding }) {
+  const total = grounding.verified.length + grounding.unverified.length;
+  if (total === 0) return null;
+  if (grounding.ok) {
+    return (
+      <div className="verdict good">
+        ✓ All {plural(total, "figure")} found in your data
+        {grounding.retried ? ", after one correction" : ""}
+      </div>
+    );
+  }
+  return (
+    <div className="verdict warning">
+      ⚠ Not found in your data: {grounding.unverified.join(", ")}
+    </div>
+  );
+}
+
+function TraceView({ trace }: { trace: Trace }) {
+  const models = trace.steps.filter((s) => s.kind === "model").length;
+  const tools = trace.steps.filter((s) => s.kind === "tool").length;
+  const totals = [plural(models, "model call"), plural(tools, "tool call")];
+  if (trace.usage.total > 0) totals.push(`${trace.usage.total.toLocaleString()} tokens`);
+  totals.push(duration(trace.total_millis));
+
+  return (
+    <details className="trace">
+      <summary>How this was answered</summary>
+      {trace.steps.map((step, i) => (
+        <div key={i} className={step.failed ? "step failed" : "step"}>
+          {[step.kind, step.label, step.detail, duration(step.millis)]
+            .filter(Boolean)
+            .join(" · ")}
+          {step.failed ? "  (failed)" : ""}
+        </div>
+      ))}
+      <div className="totals">{totals.join(" · ")}</div>
+    </details>
+  );
 }
 
 export default function Coach() {
@@ -46,6 +95,21 @@ export default function Coach() {
           case "tool":
             update((t) => ({ ...t, tools: [...t.tools, event.name] }));
             break;
+          case "retry":
+            // The answer already streamed quoted figures the tools never
+            // returned; the coach is rewriting it, so drop the draft.
+            update((t) => ({ ...t, text: "", correcting: event.unverified }));
+            break;
+          case "grounding": {
+            const { type: _, ...grounding } = event;
+            update((t) => ({ ...t, grounding, correcting: undefined }));
+            break;
+          }
+          case "trace": {
+            const { type: _, ...trace } = event;
+            update((t) => ({ ...t, trace }));
+            break;
+          }
           case "error":
             update((t) => ({ ...t, text: `${t.text}\n\n[${event.message}]` }));
             break;
@@ -78,7 +142,14 @@ export default function Coach() {
                 ))}
               </div>
             )}
+            {turn.correcting && (
+              <div className="verdict muted">
+                Rechecking — {turn.correcting.join(", ")} did not match your data…
+              </div>
+            )}
             <div className="text">{turn.text || (busy ? "…" : "")}</div>
+            {turn.grounding && <Verdict grounding={turn.grounding} />}
+            {turn.trace && <TraceView trace={turn.trace} />}
           </div>
         ))}
       </section>

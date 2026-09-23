@@ -228,11 +228,7 @@ class Coach(
             }
 
     private fun correction(grounding: Grounding): String =
-        CORRECTION_PREFIX +
-            "Your answer quoted ${grounding.unverified.joinToString(", ")}, which no tool " +
-            "returned in this conversation and the athlete did not say. Call a tool that " +
-            "returns them, or rewrite the answer without them. Do not estimate, recall or " +
-            "compute figures."
+        CORRECTION_PREFIX + CORRECTION_BODY.replace("{figures}", grounding.unverified.joinToString(", "))
 
     private fun describe(grounding: Grounding): String {
         val total = grounding.verified.size + grounding.unverified.size
@@ -324,8 +320,23 @@ class Coach(
         const val ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"
         const val DEFAULT_MODEL = "gemini-3.8-flash"
 
-        /** Marks a message the harness sent, so it is never mistaken for evidence. */
-        const val CORRECTION_PREFIX = "[Grounding check] "
+        /**
+         * What the harness says when an answer's figures do not check out —
+         * exported from the Python coach, because a retry worded differently
+         * is a different retry. The prefix marks it so it is never mistaken
+         * for evidence.
+         */
+        private val correctionText: JsonObject by lazy {
+            val text =
+                Coach::class.java.getResourceAsStream("/aura/correction.json")
+                    ?.bufferedReader()
+                    ?.use { it.readText() }
+                    ?: error("/aura/correction.json is missing. Run scripts/export_tools.py.")
+            Json.parseToJsonElement(text).jsonObject
+        }
+
+        val CORRECTION_PREFIX: String by lazy { correctionText["prefix"]!!.jsonPrimitive.content }
+        private val CORRECTION_BODY: String by lazy { correctionText["body"]!!.jsonPrimitive.content }
 
     }
 }

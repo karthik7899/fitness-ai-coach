@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import json
+import time
 from collections.abc import AsyncIterator
 
 from google import genai
@@ -19,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import settings_store
+from app.agent.grounding import CORRECTION_PREFIX, Grounding, check, correction, describe
 from app.agent.tools import HANDLERS, TOOL_SPECS
 from app.models import ChatMessage, CoachNote, Conversation
 
@@ -182,12 +185,75 @@ async def _run_tool(session: Session, name: str, args: dict) -> dict:
         return {"error": f"{type(exc).__name__}: {exc}"}
 
 
+def sources_in(contents: list[types.Content]) -> list[str]:
+    """What the model's figures may legitimately come from.
+
+    Tool results and the athlete's own words, anywhere in the conversation. Not
+    the model's earlier replies — they are not evidence — and not the
+    harness's corrections, which quote the unverified figures back.
+    """
+    sources: list[str] = []
+    for content in contents:
+        if content.role != "user":
+            continue
+        for part in content.parts or []:
+            if part.text is not None:
+                if not part.text.startswith(CORRECTION_PREFIX):
+                    sources.append(part.text)
+            elif part.function_response is not None:
+                response = part.function_response
+                sources.append(
+                    json.dumps({"name": response.name, "response": response.response}, default=str)
+                )
+    return sources
+
+
+def _millis(since: float) -> int:
+    return int((time.perf_counter() - since) * 1000)
+
+
+def _step(kind: str, label: str, detail: str, since: float, failed: bool = False) -> dict:
+    return {"kind": kind, "label": label, "detail": detail, "millis": _millis(since),
+            "failed": failed}
+
+
+def _summarise(args: dict) -> str:
+    return ", ".join(
+        f"{key}={value if isinstance(value, str) else json.dumps(value, default=str)}"
+        for key, value in args.items()
+    )
+
+
+def _usage(metadata) -> dict:
+    def count(name: str) -> int:
+        return int(getattr(metadata, name, None) or 0) if metadata is not None else 0
+
+    return {
+        "prompt": count("prompt_token_count"),
+        "output": count("candidates_token_count"),
+        "total": count("total_token_count"),
+    }
+
+
 async def stream_turn(
     session: Session, conversation: Conversation, user_text: str
 ) -> AsyncIterator[dict]:
-    """Run one user turn to completion, yielding SSE payloads as it goes."""
+    """Run one user turn to completion, yielding SSE payloads as it goes.
+
+    Wrapped in the harness: the final answer's figures are checked against
+    what the tools returned, an answer that fails is sent back once, and a
+    trace of every step is emitted at the end. Because tokens stream as they
+    arrive, an answer that gets sent back has already been shown — so a
+    `retry` event tells the page to replace it, rather than the correction
+    happening out of sight.
+    """
     client = _client(session)
     model, _ = settings_store.gemini_model(session)
+    started = time.perf_counter()
+    steps: list[dict] = []
+    usage = {"prompt": 0, "output": 0, "total": 0}
+    retried = False
+    grounding = Grounding()
 
     contents = _load_history(session, conversation.id)
     user_turn = types.Content(role="user", parts=[types.Part(text=user_text)])
@@ -205,11 +271,16 @@ async def stream_turn(
 
     for _ in range(MAX_TURNS):
         streamed: list[types.Part] = []
+        call_started = time.perf_counter()
+        metadata = None
 
         stream = await client.aio.models.generate_content_stream(
             model=model, contents=contents, config=config
         )
         async for chunk in stream:
+            # Usage arrives cumulatively; the last chunk that carries it wins.
+            if getattr(chunk, "usage_metadata", None) is not None:
+                metadata = chunk.usage_metadata
             if not chunk.candidates:
                 continue
             candidate = chunk.candidates[0]
@@ -217,6 +288,12 @@ async def stream_turn(
                 if part.text and not part.thought:
                     yield {"type": "token", "text": part.text}
                 streamed.append(part)
+
+        spent = _usage(metadata)
+        for key in usage:
+            usage[key] += spent[key]
+        spent_text = f"{spent['total']} tokens" if spent["total"] else ""
+        steps.append(_step("model", model, spent_text, call_started))
 
         parts = merge_stream_parts(streamed)
         if not parts:
@@ -229,6 +306,27 @@ async def stream_turn(
 
         calls = [p.function_call for p in parts if p.function_call is not None]
         if not calls:
+            text = "".join(p.text for p in parts if p.text and not p.thought)
+            check_started = time.perf_counter()
+            grounding = check(text, sources_in(contents))
+            steps.append(
+                _step("check", "grounding", describe(grounding), check_started,
+                      failed=not grounding.ok)
+            )
+            # One chance to correct itself; more would let a model that cannot
+            # find a figure burn the round budget looking for it.
+            if not grounding.ok and not retried:
+                retried = True
+                steps.append({"kind": "retry", "label": "sent back",
+                              "detail": ", ".join(grounding.unverified), "millis": 0,
+                              "failed": False})
+                yield {"type": "retry", "unverified": grounding.unverified}
+                correction_turn = types.Content(
+                    role="user", parts=[types.Part(text=correction(grounding))]
+                )
+                contents.append(correction_turn)
+                _persist(session, conversation.id, correction_turn)
+                continue
             break
 
         response_parts: list[types.Part] = []
@@ -236,7 +334,11 @@ async def stream_turn(
             name = call.name or ""
             args = dict(call.args or {})
             yield {"type": "tool", "name": name, "input": args}
+            tool_started = time.perf_counter()
             result = await _run_tool(session, name, args)
+            steps.append(
+                _step("tool", name, _summarise(args), tool_started, failed="error" in result)
+            )
             response_parts.append(
                 types.Part.from_function_response(name=name, response=result)
             )
@@ -249,6 +351,8 @@ async def stream_turn(
         yield {"type": "error", "message": f"Stopped after {MAX_TURNS} tool rounds."}
         return
 
+    yield {"type": "grounding", **grounding.as_dict(), "retried": retried}
+    yield {"type": "trace", "steps": steps, "usage": usage, "total_millis": _millis(started)}
     yield {"type": "done"}
 
 

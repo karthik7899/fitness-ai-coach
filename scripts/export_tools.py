@@ -23,6 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 API_DIR = REPO_ROOT / "api"
 TARGET = REPO_ROOT / "android/core/src/main/resources/aura/tools.json"
 PROMPT_TARGET = REPO_ROOT / "android/core/src/main/resources/aura/system_prompt.txt"
+CORRECTION_TARGET = REPO_ROOT / "android/core/src/main/resources/aura/correction.json"
 
 sys.path.insert(0, str(API_DIR))
 
@@ -58,8 +59,24 @@ def build_prompt() -> str:
     return SYSTEM_INSTRUCTIONS
 
 
+def build_correction() -> str:
+    """What the harness tells the model when its figures do not check out.
+
+    Part of what the model is told, so part of the contract: a retry worded
+    differently is a different retry, and live evals of one coach would stop
+    saying anything about the other.
+    """
+    from app.agent.grounding import CORRECTION_BODY, CORRECTION_PREFIX
+
+    return json.dumps({"prefix": CORRECTION_PREFIX, "body": CORRECTION_BODY}, indent=2) + "\n"
+
+
 def outputs() -> dict[Path, str]:
-    return {TARGET: build(), PROMPT_TARGET: build_prompt()}
+    return {
+        TARGET: build(),
+        PROMPT_TARGET: build_prompt(),
+        CORRECTION_TARGET: build_correction(),
+    }
 
 
 def main() -> int:

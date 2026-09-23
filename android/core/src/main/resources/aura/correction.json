@@ -1,0 +1,4 @@
+{
+  "prefix": "[Grounding check] ",
+  "body": "Your answer quoted {figures}, which no tool returned in this conversation and the athlete did not say. Call a tool that returns them, or rewrite the answer without them. Do not estimate, recall or compute figures."
+}

@@ -167,8 +167,33 @@ export type CoachEvent =
   | { type: "start"; conversation_id: number }
   | { type: "token"; text: string }
   | { type: "tool"; name: string; input: unknown }
+  | { type: "retry"; unverified: string[] }
+  | ({ type: "grounding" } & Grounding)
+  | ({ type: "trace" } & Trace)
   | { type: "error"; message: string }
   | { type: "done" };
+
+/** The harness's verdict on the final answer's figures. */
+export interface Grounding {
+  ok: boolean;
+  verified: string[];
+  unverified: string[];
+  retried: boolean;
+}
+
+export interface TraceStep {
+  kind: "model" | "tool" | "check" | "retry";
+  label: string;
+  detail: string;
+  millis: number;
+  failed: boolean;
+}
+
+export interface Trace {
+  steps: TraceStep[];
+  usage: { prompt: number; output: number; total: number };
+  total_millis: number;
+}
 
 /** POST the message and read the SSE response body. EventSource is GET-only. */
 export async function streamChat(

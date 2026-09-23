@@ -210,3 +210,32 @@ def check(answer: str, sources: list[str]) -> Grounding:
     for claim in claims_in(answer):
         (result.verified if is_grounded(claim, pool) else result.unverified).append(claim.text)
     return result
+
+
+# --------------------------------------------------------------------------
+# What the harness says back to the model
+# --------------------------------------------------------------------------
+
+# Marks a message the harness sent, so it is never counted as evidence: the
+# correction quotes the unverified figures back, and counting it would let a
+# retry verify a figure simply by repeating it. Exported with the body for the
+# Android coach, which must send exactly the same words.
+CORRECTION_PREFIX = "[Grounding check] "
+CORRECTION_BODY = (
+    "Your answer quoted {figures}, which no tool returned in this conversation "
+    "and the athlete did not say. Call a tool that returns them, or rewrite the "
+    "answer without them. Do not estimate, recall or compute figures."
+)
+
+
+def correction(grounding: Grounding) -> str:
+    return CORRECTION_PREFIX + CORRECTION_BODY.format(figures=", ".join(grounding.unverified))
+
+
+def describe(grounding: Grounding) -> str:
+    total = len(grounding.verified) + len(grounding.unverified)
+    if total == 0:
+        return "no figures to check"
+    if grounding.ok:
+        return f"{total} of {total} traced"
+    return f"{len(grounding.unverified)} of {total} not found: " + ", ".join(grounding.unverified)
