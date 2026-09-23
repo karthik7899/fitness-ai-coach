@@ -3,11 +3,14 @@ package dev.aura.app
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.aura.core.Backup
 import dev.aura.core.Db
 import dev.aura.core.Settings
 import dev.aura.core.agent.Coach
 import dev.aura.core.agent.CoachError
 import dev.aura.core.agent.Conversation
+import dev.aura.core.imports.FileKind
+import dev.aura.core.imports.Inbox
 import dev.aura.core.presentation.DashboardState
 import dev.aura.core.presentation.LogState
 import dev.aura.core.presentation.Range
@@ -38,9 +41,23 @@ data class ChatTurn(val fromUser: Boolean, val text: String, val toolsUsed: List
  * results, because a database read on the main thread is a dropped frame and,
  * with enough history, a visible stutter.
  */
-class AuraState(private val db: Db, private val scope: CoroutineScope) {
+class AuraState(
+    private val database: AuraDatabase,
+    private val storage: Storage,
+    private val scope: CoroutineScope,
+) {
 
-    private val store = Store(db)
+    // Both are replaced wholesale by a restore, so neither can be a val: every
+    // handle taken before the file was swapped is pointing at a dead database.
+    private var db: Db = database.open()
+    private var store = Store(db)
+
+    private fun reopen() {
+        runCatching { db.close() }
+        db = database.open()
+        store = Store(db)
+        conversation = Conversation.EMPTY
+    }
 
     var tab by mutableStateOf(Tab.DASHBOARD)
     var busy by mutableStateOf(false)
@@ -170,6 +187,132 @@ class AuraState(private val db: Db, private val scope: CoroutineScope) {
             }
         }
     }
+
+    // ----------------------------------------------------------------------
+    // Files
+    // ----------------------------------------------------------------------
+
+    var folders by mutableStateOf(listOf<Pair<String, android.net.Uri>>())
+        private set
+
+    fun refreshFolders() {
+        folders = storage.grantedFolders().map { storage.displayName(it) to it }
+    }
+
+    fun addFolder(tree: android.net.Uri) = load {
+        onIo { storage.persist(tree) }
+        refreshFolders()
+        notice = "Added. Import now to read what is in it."
+    }
+
+    fun forgetFolder(tree: android.net.Uri) = load {
+        onIo { storage.release(tree) }
+        refreshFolders()
+    }
+
+    /**
+     * Read every watched folder.
+     *
+     * Files are identified by content, so an unrelated file in a folder that
+     * belongs to another app is skipped in silence rather than reported as a
+     * failure — which is most of what is in those folders.
+     */
+    fun importNow() = load {
+        val outcome =
+            onIo {
+                var imported = 0
+                var written = 0
+                var skipped = 0
+                for (tree in storage.grantedFolders()) {
+                    for (entry in storage.filesIn(tree)) {
+                        val copy =
+                            runCatching { storage.copyToCache(entry.uri, entry.name) }
+                                .getOrNull() ?: continue
+                        try {
+                            storage.openReadOnly(copy).use { source ->
+                                val result = Inbox.importFrom(source, db)
+                                if (result.kind == FileKind.UNKNOWN) skipped++
+                                else {
+                                    imported++
+                                    written += result.written
+                                }
+                            }
+                        } catch (_: Exception) {
+                            // A half-written backup will be whole next time.
+                            skipped++
+                        } finally {
+                            copy.delete()
+                        }
+                    }
+                }
+                storage.clearCache()
+                Triple(imported, written, skipped)
+            }
+
+        val (files, rows, skipped) = outcome
+        notice =
+            when {
+                files == 0 && skipped == 0 -> "Nothing found. Is the right folder added?"
+                files == 0 -> "Nothing to import; $skipped file(s) were not ours."
+                else -> "Imported $rows record(s) from $files file(s)."
+            }
+        refresh()
+    }
+
+    /** Check a chosen file before offering to replace anything with it. */
+    fun inspectBackup(uri: android.net.Uri, name: String) = load {
+        pendingRestore = null
+        val info = onIo {
+            val copy = storage.copyToCache(uri, name)
+            try {
+                storage.openReadOnly(copy).use { Backup.verify(it) }
+            } finally {
+                copy.delete()
+            }
+        }
+        pendingRestore = uri to info
+    }
+
+    var pendingRestore by mutableStateOf<Pair<android.net.Uri, Backup.Info>?>(null)
+        private set
+
+    fun cancelRestore() {
+        pendingRestore = null
+    }
+
+    /** Replace everything with the chosen backup, having already verified it. */
+    fun restore(uri: android.net.Uri, name: String) = load {
+        onIo {
+            val copy = storage.copyToCache(uri, name)
+            try {
+                // Verified again rather than trusting the earlier look: the
+                // file is re-read here, and this is the irreversible step.
+                storage.openReadOnly(copy).use { Backup.verify(it) }
+                database.replaceWith(copy)
+            } finally {
+                copy.delete()
+                storage.clearCache()
+            }
+        }
+        reopen()
+        pendingRestore = null
+        notice = "Restored."
+        refresh()
+    }
+
+    /** Write a consistent copy of the database to wherever the user chose. */
+    fun exportBackup(uri: android.net.Uri) = load {
+        val info = onIo {
+            Backup.checkpoint(db)
+            storage.writeTo(uri, database.file())
+            Backup.describe(db)
+        }
+        notice =
+            if (info.isEmpty) "Saved, though there is nothing in it yet."
+            else "Saved ${info.workouts} workout(s) and ${info.sets} set(s)."
+    }
+
+    fun suggestedBackupName(): String = "aura-backup-${LocalDate.now()}.db"
 
     fun clearChat() {
         chat = emptyList()

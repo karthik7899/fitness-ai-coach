@@ -24,8 +24,11 @@ class MainActivity : ComponentActivity() {
                 val scope = rememberCoroutineScope()
                 // Opened once and kept: SQLiteOpenHelper caches the handle, and
                 // reopening it on every recomposition would be a slow mistake.
-                val app = remember { AuraState(database.open(), scope) }
-                LaunchedEffect(Unit) { app.refresh() }
+                val app = remember { AuraState(database, Storage(applicationContext), scope) }
+                LaunchedEffect(Unit) {
+                    app.refreshFolders()
+                    app.refresh()
+                }
 
                 Surface(modifier = Modifier.fillMaxSize(), color = AuraColors.Background) {
                     AuraApp(app)

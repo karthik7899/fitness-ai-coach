@@ -86,17 +86,23 @@ go back to a local one.
 
 ## Permissions
 
-`INTERNET`, and nothing else. The coach calls Gemini over HTTPS and Android
-refuses the connection without it — the app installs and runs fine, then every
-question comes back as a permission error, which is how this was found.
+`INTERNET`, and nothing else — including now that the app reads your FitNotes
+and Gadgetbridge backups.
 
-The importers need storage access, and that permission goes in when they are
-wired up rather than before. An app that asks for more than it uses is asking
-you to stop reading the list.
+The coach calls Gemini over HTTPS and Android refuses the connection without
+it. The app installs and runs fine, then every question comes back as a
+permission error, which is how this was found.
+
+Reading files needs no permission because it goes through the Storage Access
+Framework: you pick the folders in the system picker, and the grant is to those
+folders alone and persists across restarts. The alternative,
+`MANAGE_EXTERNAL_STORAGE`, is access to everything on the device in order to
+read two folders — the kind of request that teaches people to stop reading
+permission dialogs.
 
 ## State
 
-`./gradlew :core:test` — 65 tests, passing. They run the real generated schema
+`./gradlew :core:test` — 74 tests, passing. They run the real generated schema
 and the real views under SQLite, and assert the same figures the Python suite
 asserts: the guarded Epley estimate, warmup exclusion, muscle attribution and
 its category fallback, rest days as real zeros, ACWR, and source precedence
@@ -157,6 +163,11 @@ because colour alone is not a label and that is the number people misread.
 Dark only, on purpose: this is a thing you open in a gym, often late, and a
 white screen there is hostile.
 
-Still to build: importing from the watch folders on a schedule, and the backup
-and restore screens. `core` has all of it; what is missing is the Android
-plumbing — a foreground service and the storage permission.
+Import, restore and export are wired up. **Settings → Automatic import** takes
+folders through the system picker and reads them on demand; **Settings →
+Backups** writes a copy out and restores one, describing what is in a file
+before it replaces anything.
+
+Still to build: running the import on a schedule rather than when you press the
+button. That needs WorkManager, and it is the last thing standing between this
+and not needing the Termux app at all.

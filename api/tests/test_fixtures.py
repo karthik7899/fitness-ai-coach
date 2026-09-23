@@ -17,7 +17,13 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from refresh_fixtures import generate  # noqa: E402
+from refresh_fixtures import FIXTURES, build_source, generate  # noqa: E402
+
+from app.adapters.inbox import (  # noqa: E402
+    KIND_FITNOTES_DB,
+    KIND_GADGETBRIDGE,
+    detect_kind,
+)
 
 
 @pytest.fixture(scope="module")
@@ -52,3 +58,22 @@ def test_the_fixtures_actually_cover_the_conversions(produced):
     watch = produced[REPO_ROOT / "fixtures/gadgetbridge.expected.csv"]
     assert "resting_hr,51" in watch, "the resting-HR percentile is not covered"
     assert "sleep_minutes,3" in watch, "typed sleep samples are not covered"
+
+
+@pytest.mark.parametrize(
+    ("fixture", "kind"),
+    [
+        ("fitnotes_metric", KIND_FITNOTES_DB),
+        ("fitnotes_imperial", KIND_FITNOTES_DB),
+        ("gadgetbridge", KIND_GADGETBRIDGE),
+    ],
+)
+def test_both_apps_identify_a_file_the_same_way(tmp_path, fixture, kind):
+    """Identification has to agree, not just importing.
+
+    Both apps can watch the same folder. If one recognises a file the other
+    ignores, the two databases drift apart with nothing reporting an error —
+    the quietest possible failure.
+    """
+    built = build_source(FIXTURES / f"{fixture}.source.sql", tmp_path / f"{fixture}.db")
+    assert detect_kind(built) == kind

@@ -362,11 +362,11 @@ That workflow is also the only place `:app` is compiled, so its log is the real
 answer to whether the Compose code builds. Until it has run green once, treat
 the native app as unproven.
 
-What the native app does **not** do yet: import from the watch folders on a
-schedule, or back itself up. Both need Android plumbing rather than more logic —
-a foreground service and the storage permission. Until then the Termux app above
-is the one that keeps itself fed, and the two share a database format, so a
-backup taken from one restores into the other.
+The native app now imports from your backup folders and does its own backup and
+restore, so it no longer needs the Termux app to feed it. What it does not do
+yet is import on a schedule — you press the button. Until that lands, the
+Termux app is the one that keeps itself fed, and since the two share a database
+format, a backup from either restores into the other.
 
 ## Tests
 
@@ -408,7 +408,7 @@ and the Dashboard / Log / Trends / Coach UI.
 
 Started: the native Android app under `android/`. Its `core` module — the
 schema, every metrics query, both importers, backup verification and the
-coaching loop — is built and tested (`./gradlew :core:test`, 65 tests). The
+coaching loop — is built and tested (`./gradlew :core:test`, 74 tests). The
 schema and the coach's tool surface are generated from this app, and import
 behaviour is pinned by shared fixtures, so the two cannot drift apart. The
 `app` module now has all five screens in Compose — Dashboard, Log, Trends,

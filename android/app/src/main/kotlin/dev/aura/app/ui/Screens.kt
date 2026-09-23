@@ -1,5 +1,7 @@
 package dev.aura.app.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -384,7 +386,6 @@ fun SettingsScreen(state: SettingsState?, app: AuraState) {
     }
     var apiKey by remember { mutableStateOf("") }
     var model by remember { mutableStateOf(state.model) }
-    var folders by remember { mutableStateOf(state.watchFolders.joinToString("\n")) }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SectionTitle("Coach")
@@ -433,20 +434,8 @@ fun SettingsScreen(state: SettingsState?, app: AuraState) {
             }
         }
 
-        SectionTitle("Automatic import")
-        Muted(
-            "Point these at the folders FitNotes and Gadgetbridge already back up to. " +
-                "They are only ever read."
-        )
-        OutlinedTextField(
-            value = folders,
-            onValueChange = { folders = it },
-            label = { Text("One folder per line") },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Button(onClick = { app.saveWatchFolders(folders.lines()) }, enabled = !app.busy) {
-            Text("Save folders")
-        }
+        ImportSection(app)
+        BackupSection(app)
 
         SectionTitle("This build")
         Panel {
@@ -494,6 +483,123 @@ fun SettingsScreen(state: SettingsState?, app: AuraState) {
 }
 
 // --------------------------------------------------------------------------
+
+/**
+ * Folders the app may read, chosen through the system picker.
+ *
+ * Picking a folder is the permission: there is no storage permission to grant,
+ * and the app can see nothing it was not handed.
+ */
+@Composable
+private fun ImportSection(app: AuraState) {
+    val pickFolder =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri != null) app.addFolder(uri)
+        }
+
+    SectionTitle("Automatic import")
+    Muted(
+        "Choose the folders FitNotes and Gadgetbridge already back up to. They are " +
+            "only ever read, and files that are not theirs are ignored."
+    )
+
+    if (app.folders.isEmpty()) {
+        Muted("No folders yet.")
+    } else {
+        for ((name, uri) in app.folders) {
+            Panel {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(name, color = AuraColors.Text)
+                    TextButton(onClick = { app.forgetFolder(uri) }) {
+                        Text("Forget", color = AuraColors.Muted)
+                    }
+                }
+            }
+        }
+    }
+
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Button(onClick = { pickFolder.launch(null) }, enabled = !app.busy) {
+            Text("Add folder")
+        }
+        Button(onClick = { app.importNow() }, enabled = !app.busy && app.folders.isNotEmpty()) {
+            Text(if (app.busy) "Reading…" else "Import now")
+        }
+    }
+}
+
+/**
+ * Export and restore.
+ *
+ * Restore is two steps on purpose: the file is opened and described before
+ * anything is replaced, because this is the one action in the app that can
+ * destroy data.
+ */
+@Composable
+private fun BackupSection(app: AuraState) {
+    val save =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.CreateDocument("application/octet-stream")
+        ) { uri ->
+            if (uri != null) app.exportBackup(uri)
+        }
+    val pick =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) app.inspectBackup(uri, "candidate.db")
+        }
+
+    SectionTitle("Backups")
+    Muted(
+        "Your whole history is one file. A backup is that file, so the desktop app " +
+            "opens it too — it is the same schema."
+    )
+
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Button(onClick = { save.launch(app.suggestedBackupName()) }, enabled = !app.busy) {
+            Text("Save a backup")
+        }
+        Button(onClick = { pick.launch(arrayOf("*/*")) }, enabled = !app.busy) {
+            Text("Restore")
+        }
+    }
+
+    val pending = app.pendingRestore
+    if (pending != null) {
+        val (uri, info) = pending
+        Panel {
+            Text(
+                if (info.isEmpty) {
+                    "That backup has no workouts in it."
+                } else {
+                    "${info.workouts} workouts, ${info.sets} sets" +
+                        (info.earliest?.let { ", $it to ${info.latest}" } ?: "")
+                },
+                color = AuraColors.Text,
+            )
+            Text(
+                "Restoring replaces everything currently in the app.",
+                color = AuraColors.Muted,
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+            Row(
+                modifier = Modifier.padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Button(onClick = { app.restore(uri, "candidate.db") }, enabled = !app.busy) {
+                    Text("Replace my data")
+                }
+                TextButton(onClick = { app.cancelRestore() }) {
+                    Text("Cancel", color = AuraColors.Muted)
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun AuraApp(app: AuraState) {

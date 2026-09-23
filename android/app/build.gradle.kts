@@ -54,6 +54,7 @@ dependencies {
     implementation(project(":core"))
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.documentfile)
     implementation(libs.coroutines.android)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.compose.bom))
