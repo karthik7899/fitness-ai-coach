@@ -1,8 +1,13 @@
 import { type FormEvent, useEffect, useState } from "react";
 
-import { api, type Exercise, type Workout } from "../api";
+import { api, type Exercise, type Plan, type PlanEntry, type Workout } from "../api";
 
-const today = () => new Date().toISOString().slice(0, 10);
+// The local date, not toISOString's UTC one: east of Greenwich that is still
+// yesterday for the first hours of the morning, and sets would land there.
+const today = () => {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+};
 
 export default function Log() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -11,11 +16,27 @@ export default function Log() {
   const [weight, setWeight] = useState("");
   const [reps, setReps] = useState("");
   const [isWarmup, setIsWarmup] = useState(false);
+  const [plan, setPlan] = useState<Plan | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = async () => {
     const created = await api.createWorkout(today());
     setWorkout(await api.workouts(1).then((all) => all.find((w) => w.id === created.id) ?? created));
+    setPlan(await api.activePlan());
+  };
+
+  // Fill the form from the plan: its exercise, target reps, last weight.
+  const choose = (entry: PlanEntry) => {
+    if (entry.exercise_id === null) return;
+    setExerciseId(entry.exercise_id);
+    setReps(String(entry.reps));
+    setWeight(entry.last_weight_kg === null ? "" : String(entry.last_weight_kg));
+    setIsWarmup(false);
+  };
+
+  const finish = async () => {
+    await api.finishPlan();
+    setPlan(null);
   };
 
   useEffect(() => {
@@ -36,7 +57,8 @@ export default function Log() {
         reps: reps ? Number(reps) : null,
         is_warmup: isWarmup,
       });
-      setReps("");
+      // Following a plan, the next set is usually the same again.
+      if (!plan?.entries.some((e) => e.exercise_id === exerciseId)) setReps("");
       await refresh();
     } catch (e) {
       setError(String(e));
@@ -47,6 +69,42 @@ export default function Log() {
 
   return (
     <div className="stack">
+      {plan && (
+        <section>
+          <div className="card-head">
+            <h2>{plan.template.name}</h2>
+            <button className="link" onClick={finish}>
+              finish
+            </button>
+          </div>
+          <div className="plan">
+            {plan.entries.map((entry) => {
+              const complete = entry.done >= entry.sets;
+              return (
+                <button
+                  key={entry.exercise}
+                  className={`plan-row${entry.exercise_id === exerciseId ? " chosen" : ""}`}
+                  onClick={() => choose(entry)}
+                >
+                  <span>
+                    {entry.exercise}
+                    <span className="muted small">
+                      {" "}
+                      {entry.sets} × {entry.reps}
+                      {entry.last_weight_kg !== null && ` · last ${entry.last_weight_kg} kg`}
+                    </span>
+                  </span>
+                  <span className={complete ? "done" : "muted"}>
+                    {complete ? "✓ " : ""}
+                    {entry.done}/{entry.sets}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <section>
         <h2>Log a set — {today()}</h2>
         <form onSubmit={submit} className="row">

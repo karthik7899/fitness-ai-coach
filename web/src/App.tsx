@@ -29,7 +29,7 @@ export default function App() {
         </nav>
       </header>
       <main>
-        {tab === "Dashboard" && <Dashboard />}
+        {tab === "Dashboard" && <Dashboard onStart={() => setTab("Log")} />}
         {tab === "Log" && <Log />}
         {tab === "Trends" && <Trends />}
         {tab === "Coach" && <Coach />}

@@ -34,6 +34,18 @@ class PresentationTest {
     }
 
     @Test
+    fun `a phone set to a decimal-comma locale formats the same`() {
+        val original = java.util.Locale.getDefault()
+        java.util.Locale.setDefault(java.util.Locale.GERMANY)
+        try {
+            assertEquals("102.5", Format.number(102.5))
+            assertEquals("1,234.5", Format.number(1234.5))
+        } finally {
+            java.util.Locale.setDefault(original)
+        }
+    }
+
+    @Test
     fun `thousands are grouped`() {
         assertEquals("1,000", Format.number(1000.0))
         assertEquals("10,872", Format.number(10872.0))

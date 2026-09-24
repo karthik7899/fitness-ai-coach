@@ -24,7 +24,9 @@ object Format {
      * noise on a tile, so trailing zeros go — including all of them.
      */
     fun number(value: Double, decimals: Int = 2): String {
-        val text = String.format("%.${decimals}f", value)
+        // ROOT, not the phone's locale: a decimal comma would leave no '.'
+        // to trim at and fail the toLong below.
+        val text = String.format(java.util.Locale.ROOT, "%.${decimals}f", value)
         val trimmed =
             if ('.' in text) text.trimEnd('0').trimEnd('.') else text
         val point = trimmed.indexOf('.')

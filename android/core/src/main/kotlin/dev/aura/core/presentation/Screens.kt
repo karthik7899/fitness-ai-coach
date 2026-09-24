@@ -8,8 +8,11 @@ import dev.aura.core.ExerciseDay
 import dev.aura.core.ExerciseTotal
 import dev.aura.core.Metrics
 import dev.aura.core.MuscleVolume
+import dev.aura.core.Plan
 import dev.aura.core.Settings
+import dev.aura.core.Template
 import dev.aura.core.TrainingLoad
+import dev.aura.core.Workouts
 import java.time.LocalDate
 
 /** A labelled point for a chart. Charts take these, never database rows. */
@@ -22,6 +25,9 @@ data class DashboardState(
     val load: TrainingLoad?,
     val band: LoadBand,
     val recent: List<DailyVolume>,
+    val templates: List<Template> = emptyList(),
+    /** The template started today, if any, so its card can say "Continue". */
+    val activeTemplate: String? = null,
 )
 
 data class TrendsState(
@@ -39,6 +45,8 @@ data class LogState(
     val day: LocalDate,
     val sets: List<LoggedSet>,
     val recentExercises: List<String>,
+    /** Today's plan from a starter workout, if one was started. */
+    val plan: Plan? = null,
 )
 
 data class LoggedSet(
@@ -81,8 +89,17 @@ class Store(private val db: Db) {
             load = summary.load,
             band = LoadBand.of(summary.load?.acwr),
             recent = summary.recentWorkouts,
+            templates = Workouts.templates,
+            activeTemplate = Workouts.plan(db, today)?.template?.id,
         )
     }
+
+    /** Make a starter workout today's plan; the Log screen then follows it. */
+    fun startWorkout(id: String, today: LocalDate = LocalDate.now()) {
+        requireNotNull(Workouts.start(db, id, today)) { "No workout named $id." }
+    }
+
+    fun finishWorkout() = Workouts.finish(db)
 
     fun trends(
         range: Range = Range.QUARTER,
@@ -143,6 +160,7 @@ class Store(private val db: Db) {
                     LIMIT 20
                     """
                 ) { it.string("name") },
+            plan = Workouts.plan(db, day),
         )
 
     fun settings(): SettingsState =

@@ -66,6 +66,7 @@ are the places where two implementations would otherwise drift apart:
 | `tools.json` | `scripts/export_tools.py` | two coaches that can answer different questions |
 | `system_prompt.txt` | `scripts/export_tools.py` | two coaches with different instructions |
 | `correction.json` | `scripts/export_tools.py` | a grounding retry that asks the model for different things |
+| `workouts.json` | `scripts/export_workouts.py` | different starter workouts, or the same exercise attributed to different muscles |
 
 A test on each side fails when they disagree. Python's fails when a file falls
 behind. Kotlin's fails when a tool is declared with no handler to run it.

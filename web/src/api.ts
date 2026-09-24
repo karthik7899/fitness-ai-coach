@@ -98,6 +98,29 @@ export interface SaveResult extends SettingsPayload {
 
 const range = (start: string, end: string) => `start=${start}&end=${end}`;
 
+export interface Template {
+  id: string;
+  name: string;
+  about: string;
+  exercises: { exercise: string; sets: number; reps: number }[];
+}
+
+export interface PlanEntry {
+  exercise: string;
+  exercise_id: number | null;
+  sets: number;
+  reps: number;
+  done: number;
+  last_weight_kg: number | null;
+}
+
+/** Today's starter workout, with progress through it. */
+export interface Plan {
+  template: Template;
+  day: string;
+  entries: PlanEntry[];
+}
+
 export const api = {
   summary: () => request<Summary>("/metrics/summary"),
   load: (start: string, end: string) => request<LoadRow[]>(`/metrics/load?${range(start, end)}`),
@@ -122,6 +145,12 @@ export const api = {
       body: JSON.stringify(body),
     }),
   deleteSet: (setId: number) => request<void>(`/sets/${setId}`, { method: "DELETE" }),
+
+  templates: () => request<Template[]>("/templates"),
+  activePlan: () => request<Plan | null>("/templates/active"),
+  startTemplate: (id: string) =>
+    request<Plan>(`/templates/${encodeURIComponent(id)}/start`, { method: "POST" }),
+  finishPlan: () => request<void>("/templates/active", { method: "DELETE" }),
 
   settings: () => request<SettingsPayload>("/settings"),
   saveGemini: (body: { api_key?: string; model?: string }) =>

@@ -65,6 +65,14 @@ The tool specs in `agent/tools.py` are plain JSON Schema and carry no provider
 types; only `agent/coach.py` knows about Gemini, so swapping providers is one
 file.
 
+**Starter workouts.** The Dashboard offers six plain sessions: Full body A
+and B, Push, Pull, Legs, and No equipment. Starting one creates any of its
+exercises that are missing, with their muscles, and makes it today's plan. The
+Log screen then shows it as a checklist. Tapping an exercise fills in the
+target reps and the weight you used last time, and each exercise counts your
+working sets toward its target. The templates live in `api/app/workouts.py`
+and are generated into the Android app, so both apps offer the same sessions.
+
 **5. Two databases, one schema.** On a phone the database is SQLite — a file the
 server opens, with no daemon to keep alive, which removes the most fragile part
 of an Android install. On a desktop it is PostgreSQL. The migrations, the seven
@@ -207,6 +215,7 @@ api/
     queries.py         shared SQL row helpers
     scheduler.py       interval sync, started by the app lifespan
     settings_store.py  UI settings layered over .env
+    workouts.py        starter workout templates and today's plan
     adapters/          inbox, fitnotes, gadgetbridge, strava, health_connect
     agent/             tool definitions + the coaching loop
     routers/           training, metrics, coach (SSE), sync, settings

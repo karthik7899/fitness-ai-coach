@@ -142,6 +142,18 @@ class AuraState(
         log = onIo { store.log() }
     }
 
+    /** Make a starter workout today's plan and go to where it is logged. */
+    fun startWorkout(id: String) = load {
+        onIo { store.startWorkout(id) }
+        tab = Tab.LOG
+        log = onIo { store.log() }
+    }
+
+    fun finishWorkout() = load {
+        onIo { store.finishWorkout() }
+        log = onIo { store.log() }
+    }
+
     fun deleteSet(id: Int) = load {
         onIo { store.deleteSet(id) }
         log = onIo { store.log() }

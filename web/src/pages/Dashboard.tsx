@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { api, type Summary } from "../api";
+import { api, type Summary, type Template } from "../api";
 
 const METRIC_LABELS: Record<string, string> = {
   steps: "Steps",
@@ -19,13 +19,29 @@ function formatMetric(metric: string, value: number): string {
   return metric === "steps" ? value.toLocaleString() : `${value}`;
 }
 
-export default function Dashboard() {
+export default function Dashboard({ onStart }: { onStart: () => void }) {
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [active, setActive] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api.summary().then(setSummary).catch((e) => setError(String(e)));
+    api.templates().then(setTemplates).catch((e) => setError(String(e)));
+    api.activePlan().then((plan) => setActive(plan?.template.id ?? null)).catch(() => {});
   }, []);
+
+  const start = async (id: string) => {
+    setStarting(true);
+    try {
+      await api.startTemplate(id);
+      onStart();
+    } catch (e) {
+      setError(String(e));
+      setStarting(false);
+    }
+  };
 
   if (error) return <p className="error">{error}</p>;
   if (!summary) return <p className="muted">Loading…</p>;
@@ -34,6 +50,30 @@ export default function Dashboard() {
 
   return (
     <div className="stack">
+      {templates.length > 0 && (
+        <section>
+          <h2>Workouts</h2>
+          <div className="cards">
+            {templates.map((t) => (
+              <div className="card" key={t.id}>
+                <div className="card-head">
+                  <div>
+                    <strong>{t.name}</strong>
+                    <div className="muted small">{t.about}</div>
+                  </div>
+                  <button onClick={() => start(t.id)} disabled={starting}>
+                    {t.id === active ? "Continue" : "Start"}
+                  </button>
+                </div>
+                <div className="muted small">
+                  {t.exercises.map((e) => `${e.exercise} ${e.sets}×${e.reps}`).join(" · ")}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section>
         <h2>Latest wellness</h2>
         {metrics.length === 0 ? (

@@ -2,6 +2,7 @@ package dev.aura.app.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -31,6 +33,9 @@ import dev.aura.app.AuraState
 import dev.aura.app.BuildConfig
 import dev.aura.app.Tab
 import dev.aura.app.ChatTurn
+import dev.aura.core.Plan
+import dev.aura.core.PlanEntry
+import dev.aura.core.Template
 import dev.aura.core.agent.Grounding
 import dev.aura.core.agent.Trace
 import dev.aura.core.agent.TraceStep
@@ -56,12 +61,24 @@ private fun bandColor(band: LoadBand): Color =
 // --------------------------------------------------------------------------
 
 @Composable
-fun DashboardScreen(state: DashboardState?) {
+fun DashboardScreen(state: DashboardState?, app: AuraState) {
     if (state == null) {
         Muted("Loading…")
         return
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (state.templates.isNotEmpty()) {
+            SectionTitle("Workouts")
+            for (template in state.templates) {
+                TemplateCard(
+                    template = template,
+                    active = template.id == state.activeTemplate,
+                    enabled = !app.busy,
+                    onStart = { app.startWorkout(template.id) },
+                )
+            }
+        }
+
         if (state.wellness.isNotEmpty()) {
             SectionTitle("Latest wellness")
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -123,6 +140,40 @@ fun DashboardScreen(state: DashboardState?) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TemplateCard(
+    template: Template,
+    active: Boolean,
+    enabled: Boolean,
+    onStart: () -> Unit,
+) {
+    Panel {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(template.name, color = AuraColors.Text, fontWeight = FontWeight.SemiBold)
+                Text(
+                    template.about,
+                    color = AuraColors.Muted,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+            TextButton(onClick = onStart, enabled = enabled) {
+                Text(if (active) "Continue" else "Start", color = AuraColors.Accent)
+            }
+        }
+        Text(
+            template.exercises.joinToString(" · ") { "${it.exercise} ${it.sets}×${it.reps}" },
+            color = AuraColors.Muted,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(top = 6.dp),
+        )
     }
 }
 
@@ -212,6 +263,23 @@ fun LogScreen(state: LogState?, app: AuraState) {
     var warmup by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        state.plan?.let { plan ->
+            PlanSection(
+                plan = plan,
+                selected = exercise,
+                onChoose = { entry ->
+                    exercise = entry.exercise
+                    reps = entry.reps.toString()
+                    // Plain digits: this is parsed back, so no grouping or locale.
+                    weight = entry.lastWeightKg
+                        ?.let { java.math.BigDecimal.valueOf(it).stripTrailingZeros().toPlainString() }
+                        .orEmpty()
+                    warmup = false
+                },
+                onFinish = app::finishWorkout,
+            )
+        }
+
         SectionTitle("Log a set — ${Format.day(state.day)}")
 
         OutlinedTextField(
@@ -262,8 +330,12 @@ fun LogScreen(state: LogState?, app: AuraState) {
             Button(
                 onClick = {
                     app.addSet(exercise, weight.toDoubleOrNull(), reps.toIntOrNull(), warmup)
-                    weight = ""
-                    reps = ""
+                    // Following a plan, the next set is usually the same again.
+                    val planned = state.plan?.entries?.any { it.exercise.equals(exercise.trim(), true) }
+                    if (planned != true) {
+                        weight = ""
+                        reps = ""
+                    }
                 },
                 enabled = exercise.isNotBlank() && !app.busy,
             ) {
@@ -305,6 +377,59 @@ fun LogScreen(state: LogState?, app: AuraState) {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Today's starter workout as a checklist. Tapping an exercise fills the form
+ * below with it: the target reps and the weight used last time.
+ */
+@Composable
+private fun PlanSection(
+    plan: Plan,
+    selected: String,
+    onChoose: (PlanEntry) -> Unit,
+    onFinish: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SectionTitle(plan.template.name + if (plan.complete) " — done" else "")
+        TextButton(onClick = onFinish) { Text("Finish", color = AuraColors.Muted) }
+    }
+    for (entry in plan.entries) {
+        val chosen = entry.exercise.equals(selected.trim(), ignoreCase = true)
+        Panel(modifier = Modifier.clickable { onChoose(entry) }) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        entry.exercise,
+                        color = if (chosen) AuraColors.Accent else AuraColors.Text,
+                        fontWeight = if (chosen) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                    Text(
+                        buildString {
+                            append("${entry.sets} × ${entry.reps}")
+                            entry.lastWeightKg?.let { append("  ·  last ${Format.kg(it)}") }
+                        },
+                        color = AuraColors.Muted,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+                // Stated in words as well as colour, which alone is not a label.
+                Text(
+                    if (entry.complete) "✓ ${entry.done}/${entry.sets}" else "${entry.done}/${entry.sets}",
+                    color = if (entry.complete) AuraColors.StatusGood else AuraColors.Muted,
+                    style = MaterialTheme.typography.labelLarge,
+                )
             }
         }
     }
@@ -707,7 +832,7 @@ fun AuraApp(app: AuraState) {
         }
 
         when (app.tab) {
-            Tab.DASHBOARD -> DashboardScreen(app.dashboard)
+            Tab.DASHBOARD -> DashboardScreen(app.dashboard, app)
             Tab.LOG -> LogScreen(app.log, app)
             Tab.TRENDS -> TrendsScreen(app.trends, app)
             Tab.COACH -> CoachScreen(app)

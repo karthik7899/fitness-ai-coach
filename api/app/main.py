@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import REPO_ROOT
-from app.routers import backup, coach, metrics, settings, sync, training
+from app.routers import backup, coach, metrics, settings, sync, templates, training
 from app.scheduler import create_scheduler
 
 WEB_DIST = REPO_ROOT / "web" / "dist"
@@ -42,6 +42,7 @@ app.add_middleware(
 )
 
 app.include_router(training.router)
+app.include_router(templates.router)
 app.include_router(metrics.router)
 app.include_router(coach.router)
 app.include_router(sync.router)
