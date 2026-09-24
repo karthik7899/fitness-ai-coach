@@ -7,10 +7,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app import workouts
+from app import records, workouts
 from app.db import get_session
 from app.models import Exercise, SetEntry, Workout
-from app.schemas import ExerciseIn, ExerciseOut, SetIn, SetOut, WorkoutIn, WorkoutOut
+from app.schemas import (
+    ExerciseIn,
+    ExerciseOut,
+    SetIn,
+    SetOut,
+    SetUpdate,
+    WorkoutIn,
+    WorkoutOut,
+)
 
 router = APIRouter(prefix="/api", tags=["training"])
 
@@ -122,3 +130,27 @@ def delete_set(set_id: int, session: Session = Depends(get_session)):
         raise HTTPException(404, "No such set.")
     session.delete(entry)
     session.commit()
+
+
+@router.put("/sets/{set_id}", response_model=SetOut)
+def update_set(set_id: int, payload: SetUpdate, session: Session = Depends(get_session)):
+    """Correct a logged set. Its exercise, workout and place in it stay."""
+    entry = session.get(SetEntry, set_id)
+    if entry is None:
+        raise HTTPException(404, "No such set.")
+    entry.weight_kg = Decimal(str(payload.weight_kg)) if payload.weight_kg is not None else None
+    entry.reps = payload.reps
+    entry.rpe = Decimal(str(payload.rpe)) if payload.rpe is not None else None
+    entry.is_warmup = payload.is_warmup
+    session.commit()
+    return entry
+
+
+@router.get("/sets/{set_id}/records")
+def set_records(set_id: int, session: Session = Depends(get_session)):
+    """The personal records this set broke, for the alert after logging it."""
+    found = records.for_set(session, set_id)
+    if found is None:
+        raise HTTPException(404, "No such set.")
+    exercise, beaten = found
+    return {"exercise": exercise, "records": [r.as_dict() for r in beaten]}

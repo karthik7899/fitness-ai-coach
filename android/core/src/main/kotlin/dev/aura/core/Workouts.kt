@@ -84,6 +84,7 @@ object Workouts {
     private data class Document(
         val catalogue: List<CatalogueEntry>,
         val templates: List<Template>,
+        @kotlinx.serialization.SerialName("muscle_targets") val muscleTargets: MuscleTargets,
     )
 
     private val document: Document by lazy {
@@ -100,6 +101,9 @@ object Workouts {
 
     val templates: List<Template>
         get() = document.templates
+
+    val muscleTargets: MuscleTargets
+        get() = document.muscleTargets
 
     fun template(id: String): Template? = templates.firstOrNull { it.id == id }
 

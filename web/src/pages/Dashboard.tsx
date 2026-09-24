@@ -1,6 +1,39 @@
 import { useEffect, useState } from "react";
 
-import { api, type Summary, type Template } from "../api";
+import { api, type MuscleSets, type Summary, type Template } from "../api";
+
+const STATUS: Record<MuscleSets["status"], string> = {
+  under: "under",
+  on_target: "on target",
+  over: "high",
+};
+
+/**
+ * Working sets per muscle over the last seven days against the 10–20 target.
+ * Bars are scaled to the target's top; the status is written as well as coloured.
+ */
+function MuscleTile({ rows }: { rows: MuscleSets[] }) {
+  const scale = Math.max(20, ...rows.map((r) => r.sets));
+  return (
+    <section>
+      <h2>Sets per muscle · last 7 days</h2>
+      <p className="muted small">Target: 10–20 working sets a week for each muscle.</p>
+      <div className="muscles">
+        {rows.map((r) => (
+          <div className={`muscle ${r.status}`} key={r.muscle}>
+            <span>{r.label}</span>
+            <span className="bar">
+              <span style={{ width: `${(r.sets / scale) * 100}%` }} />
+            </span>
+            <span className="count">
+              {r.sets} · {STATUS[r.status]}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 const METRIC_LABELS: Record<string, string> = {
   steps: "Steps",
@@ -24,11 +57,13 @@ export default function Dashboard({ onStart }: { onStart: () => void }) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [muscles, setMuscles] = useState<MuscleSets[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api.summary().then(setSummary).catch((e) => setError(String(e)));
     api.templates().then(setTemplates).catch((e) => setError(String(e)));
+    api.muscleSets().then((body) => setMuscles(body.muscles)).catch(() => {});
     api.activePlan().then((plan) => setActive(plan?.template.id ?? null)).catch(() => {});
   }, []);
 
@@ -114,6 +149,8 @@ export default function Dashboard({ onStart }: { onStart: () => void }) {
           <p className="muted">No load computed yet.</p>
         )}
       </section>
+
+      {muscles.length > 0 && <MuscleTile rows={muscles} />}
 
       <section>
         <h2>Recent sessions</h2>

@@ -40,7 +40,9 @@ import dev.aura.app.BuildConfig
 import dev.aura.app.Tab
 import dev.aura.app.ChatTurn
 import dev.aura.core.Advice
+import dev.aura.core.MuscleSets
 import dev.aura.core.Plan
+import dev.aura.core.Record
 import dev.aura.core.PlanEntry
 import dev.aura.core.Template
 import dev.aura.core.agent.Grounding
@@ -50,6 +52,7 @@ import dev.aura.core.presentation.DashboardState
 import dev.aura.core.presentation.Format
 import dev.aura.core.presentation.LoadBand
 import dev.aura.core.presentation.LogState
+import dev.aura.core.presentation.LoggedSet
 import dev.aura.core.presentation.Point
 import dev.aura.core.presentation.Range
 import dev.aura.core.presentation.Series
@@ -126,6 +129,10 @@ fun DashboardScreen(state: DashboardState?, app: AuraState) {
                     modifier = Modifier.weight(1f),
                 )
             }
+        }
+
+        if (state.muscleSets.isNotEmpty()) {
+            MuscleTile(state.muscleSets)
         }
 
         SectionTitle("Recent sessions")
@@ -269,9 +276,11 @@ fun LogScreen(state: LogState?, app: AuraState) {
     var reps by remember { mutableStateOf("") }
     var warmup by remember { mutableStateOf(false) }
     var rpe by remember { mutableStateOf<String?>(null) }
+    var editing by remember { mutableStateOf<Int?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         RestTimer(app)
+        app.records?.let { (exercise, found) -> RecordBanner(exercise, found, app::dismissRecords) }
 
         state.plan?.let { plan ->
             PlanSection(
@@ -391,7 +400,19 @@ fun LogScreen(state: LogState?, app: AuraState) {
             Muted("Nothing logged yet today.")
         } else {
             for (entry in state.sets) {
-                Panel {
+                if (editing == entry.id) {
+                    EditSet(
+                        entry,
+                        onSave = { w, r, e, warm ->
+                            app.updateSet(entry.id, w, r, e, warm)
+                            editing = null
+                        },
+                        onCancel = { editing = null },
+                    )
+                    continue
+                }
+                // Tap a set to correct it.
+                Panel(modifier = Modifier.clickable { editing = entry.id }) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -548,6 +569,140 @@ private fun RestTimer(app: AuraState) {
             modifier = Modifier.fillMaxWidth().height(4.dp).background(AuraColors.Border)
         ) {
             Box(Modifier.fillMaxWidth(fraction).fillMaxHeight().background(AuraColors.Accent))
+        }
+    }
+}
+
+/** "Heaviest ever: 105 kg (was 100 kg)", and so on. */
+private fun recordLine(r: Record): String =
+    when (r.kind) {
+        Record.Kind.WEIGHT -> "Heaviest ever: ${Format.kg(r.value)} (was ${Format.kg(r.previous)})"
+        Record.Kind.E1RM -> "Best estimated 1RM: ${Format.kg(r.value)} (was ${Format.kg(r.previous)})"
+        Record.Kind.REPS ->
+            "Most reps at this weight or heavier: ${r.value.toInt()} (was ${r.previous.toInt()})"
+    }
+
+@Composable
+private fun RecordBanner(exercise: String, found: List<Record>, onDismiss: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
+    LaunchedEffect(exercise, found) { haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
+    Panel {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "🏆 New PR · $exercise",
+                color = AuraColors.StatusGood,
+                fontWeight = FontWeight.SemiBold,
+            )
+            TextButton(onClick = onDismiss) { Text("OK", color = AuraColors.Muted) }
+        }
+        for (r in found) {
+            Text(recordLine(r), color = AuraColors.Text, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+/** A logged set opened for correction: weight, reps, RPE and whether it was a warmup. */
+@Composable
+private fun EditSet(
+    entry: LoggedSet,
+    onSave: (Double?, Int?, Double?, Boolean) -> Unit,
+    onCancel: () -> Unit,
+) {
+    fun plain(v: Double?) = v?.let { java.math.BigDecimal.valueOf(it).stripTrailingZeros().toPlainString() }.orEmpty()
+    var weight by remember(entry.id) { mutableStateOf(plain(entry.weightKg)) }
+    var reps by remember(entry.id) { mutableStateOf(entry.reps?.toString().orEmpty()) }
+    var rpe by remember(entry.id) { mutableStateOf(entry.rpe?.let { Format.number(it, 1) }) }
+    var warmup by remember(entry.id) { mutableStateOf(entry.isWarmup) }
+
+    Panel {
+        Text(entry.exercise, color = AuraColors.Text, fontWeight = FontWeight.SemiBold)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedTextField(
+                value = weight,
+                onValueChange = { weight = it },
+                label = { Text("kg") },
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedTextField(
+                value = reps,
+                onValueChange = { reps = it },
+                label = { Text("Reps") },
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Muted("RPE", modifier = Modifier.padding(end = 4.dp))
+            ChipRow(
+                options = listOf("6", "7", "8", "9", "10"),
+                selected = rpe.orEmpty(),
+                onSelect = { rpe = if (rpe == it) null else it },
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Button(onClick = { onSave(weight.toDoubleOrNull(), reps.toIntOrNull(), rpe?.toDoubleOrNull(), warmup) }) {
+                Text("Save")
+            }
+            TextButton(onClick = { warmup = !warmup }) {
+                Text(
+                    if (warmup) "Warmup ✓" else "Warmup",
+                    color = if (warmup) AuraColors.Accent else AuraColors.Muted,
+                )
+            }
+            TextButton(onClick = onCancel) { Text("Cancel", color = AuraColors.Muted) }
+        }
+    }
+}
+
+/**
+ * Working sets per muscle over the last seven days against the 10–20 target.
+ * Each bar is scaled to the target's top, so "on target" is a bar most of the
+ * way across; the status is written as well as coloured.
+ */
+@Composable
+private fun MuscleTile(rows: List<MuscleSets>) {
+    SectionTitle("Sets per muscle · last 7 days")
+    Muted("Target: 10–20 working sets a week for each muscle.")
+    Panel {
+        val scale = maxOf(20, rows.maxOf { it.sets }).toFloat()
+        for (row in rows) {
+            val (word, color) =
+                when (row.status) {
+                    MuscleSets.Status.UNDER -> "under" to AuraColors.Muted
+                    MuscleSets.Status.ON_TARGET -> "on target" to AuraColors.StatusGood
+                    MuscleSets.Status.OVER -> "high" to AuraColors.StatusSerious
+                }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    row.label,
+                    color = AuraColors.Text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(0.35f),
+                )
+                Box(modifier = Modifier.weight(0.35f).height(6.dp).background(AuraColors.Border)) {
+                    Box(
+                        Modifier.fillMaxWidth((row.sets / scale).coerceIn(0f, 1f))
+                            .fillMaxHeight()
+                            .background(if (row.sets == 0) AuraColors.Border else color)
+                    )
+                }
+                Text(
+                    "${row.sets} · $word",
+                    color = color,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.weight(0.3f).padding(start = 8.dp),
+                )
+            }
         }
     }
 }

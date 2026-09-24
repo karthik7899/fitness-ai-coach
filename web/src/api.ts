@@ -141,6 +141,20 @@ export interface Merge {
   drop: DuplicateExercise[];
 }
 
+/** A personal record one set broke. */
+export interface SetRecord {
+  kind: "weight" | "e1rm" | "reps";
+  value: number;
+  previous: number;
+}
+
+export interface MuscleSets {
+  muscle: string;
+  label: string;
+  sets: number;
+  status: "under" | "on_target" | "over";
+}
+
 export const api = {
   summary: () => request<Summary>("/metrics/summary"),
   load: (start: string, end: string) => request<LoadRow[]>(`/metrics/load?${range(start, end)}`),
@@ -165,6 +179,16 @@ export const api = {
       body: JSON.stringify(body),
     }),
   deleteSet: (setId: number) => request<void>(`/sets/${setId}`, { method: "DELETE" }),
+  updateSet: (
+    setId: number,
+    body: { weight_kg: number | null; reps: number | null; rpe: number | null; is_warmup: boolean },
+  ) => request<SetEntry>(`/sets/${setId}`, { method: "PUT", body: JSON.stringify(body) }),
+  setRecords: (setId: number) =>
+    request<{ exercise: string; records: SetRecord[] }>(`/sets/${setId}/records`),
+  muscleSets: () =>
+    request<{ target: { min: number; max: number; major: string[] }; muscles: MuscleSets[] }>(
+      "/metrics/muscle-sets",
+    ),
 
   duplicates: () => request<Merge[]>("/exercises/duplicates"),
   mergeDuplicates: () =>

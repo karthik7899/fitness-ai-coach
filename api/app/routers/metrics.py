@@ -5,6 +5,7 @@ import datetime as dt
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app import muscles
 from app.db import get_session
 from app.queries import rows as _rows
 
@@ -161,4 +162,13 @@ def summary(session: Session = Depends(get_session)):
         "latest_metrics": {r["metric"]: r for r in latest},
         "load": load[0] if load else None,
         "recent_workouts": recent,
+    }
+
+
+@router.get("/muscle-sets")
+def muscle_sets(session: Session = Depends(get_session)):
+    """Working sets per muscle over the last seven days, against the weekly target."""
+    return {
+        "target": muscles.document(),
+        "muscles": muscles.last_seven_days(session, dt.date.today()),
     }

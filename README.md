@@ -83,6 +83,27 @@ set with the same numbers. The rule lives in `api/app/progression.py` and
 big lifts, 2 for other compounds, 75 seconds for isolation, and 1 for warmups.
 It buzzes and beeps at zero while the app is open.
 
+**Personal records.** After each working set, the app checks it against every
+earlier set of that exercise and shows an alert for any record it broke:
+
+- **Heaviest weight** ever lifted.
+- **Best estimated 1RM**, using the same formula as the Trends chart.
+- **Most reps at this weight or heavier.** This only counts where such a set
+  already exists; at a brand-new weight, the heaviest-weight alert says it.
+
+A first set is not a record. Warmups are never checked or counted. Like
+progression, the rule is written as cases in `fixtures/records.json`, and both
+apps must pass them.
+
+**Editing sets.** Tap a logged set (on the web, click "edit") to correct its
+weight, reps, RPE or warmup flag.
+
+**Sets per muscle.** A Dashboard tile counts working sets per muscle over the
+last 7 days, against the common target of 10–20 hard sets a muscle per week.
+It always lists the twelve major muscles, including any at zero. Sets are
+attributed the same way as the volume view: once for each primary muscle of
+the exercise.
+
 **Starter workouts.** The Dashboard offers one plain session per body part:
 Chest, Back, Shoulders, Legs, Triceps and Biceps. Starting one creates any of
 its exercises that are missing, with their muscles, and makes it today's plan.

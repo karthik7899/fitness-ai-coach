@@ -30,6 +30,15 @@ class SetIn(BaseModel):
     notes: str | None = None
 
 
+class SetUpdate(BaseModel):
+    """A correction to a logged set: the fields a typo can get wrong."""
+
+    weight_kg: float | None = None
+    reps: int | None = None
+    rpe: float | None = Field(default=None, ge=1, le=10)
+    is_warmup: bool = False
+
+
 class SetOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

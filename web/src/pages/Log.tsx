@@ -1,6 +1,14 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
-import { api, type Exercise, type Plan, type PlanEntry, type Workout } from "../api";
+import {
+  api,
+  type Exercise,
+  type Plan,
+  type PlanEntry,
+  type SetEntry,
+  type SetRecord,
+  type Workout,
+} from "../api";
 
 /** Today's target in words, with which way it moved and why. */
 function targetLine(entry: PlanEntry): string {
@@ -85,6 +93,75 @@ function RestTimer({ endsAt, total, onChange }: {
   );
 }
 
+/** "Heaviest ever: 105 kg (was 100 kg)", and so on. */
+function recordLine(r: SetRecord): string {
+  switch (r.kind) {
+    case "weight":
+      return `Heaviest ever: ${r.value} kg (was ${r.previous} kg)`;
+    case "e1rm":
+      return `Best estimated 1RM: ${r.value} kg (was ${r.previous} kg)`;
+    case "reps":
+      return `Most reps at this weight or heavier: ${r.value} (was ${r.previous})`;
+  }
+}
+
+/** A logged set opened for correction, in place of its table row. */
+function EditRow({ set, name, onDone }: { set: SetEntry; name: string; onDone: () => void }) {
+  const [weight, setWeight] = useState(set.weight_kg === null ? "" : String(set.weight_kg));
+  const [reps, setReps] = useState(set.reps === null ? "" : String(set.reps));
+  const [rpe, setRpe] = useState(set.rpe === null ? "" : String(set.rpe));
+  const [warmup, setWarmup] = useState(set.is_warmup);
+
+  const save = async () => {
+    await api.updateSet(set.id, {
+      weight_kg: weight ? Number(weight) : null,
+      reps: reps ? Number(reps) : null,
+      rpe: rpe ? Number(rpe) : null,
+      is_warmup: warmup,
+    });
+    onDone();
+  };
+
+  return (
+    <tr className="editing">
+      <td>{set.position}</td>
+      <td>
+        {name}
+        <label className="checkbox small">
+          <input type="checkbox" checked={warmup} onChange={(e) => setWarmup(e.target.checked)} />
+          warmup
+        </label>
+      </td>
+      <td>
+        <input type="number" step="0.5" aria-label="kg" value={weight}
+          onChange={(e) => setWeight(e.target.value)} />
+      </td>
+      <td>
+        <input type="number" aria-label="reps" value={reps}
+          onChange={(e) => setReps(e.target.value)} />
+      </td>
+      <td>
+        <select value={rpe} aria-label="edit RPE" onChange={(e) => setRpe(e.target.value)}>
+          <option value="">—</option>
+          {["6", "7", "8", "9", "10"].map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td>
+        <button className="link" onClick={save}>
+          save
+        </button>{" "}
+        <button className="link" onClick={onDone}>
+          cancel
+        </button>
+      </td>
+    </tr>
+  );
+}
+
 // The local date, not toISOString's UTC one: east of Greenwich that is still
 // yesterday for the first hours of the morning, and sets would land there.
 const today = () => {
@@ -101,6 +178,10 @@ export default function Log() {
   const [isWarmup, setIsWarmup] = useState(false);
   const [rpe, setRpe] = useState("");
   const [rest, setRest] = useState<{ endsAt: number; total: number } | null>(null);
+  const [records, setRecords] = useState<{ exercise: string; records: SetRecord[] } | null>(
+    null,
+  );
+  const [editing, setEditing] = useState<number | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -138,7 +219,7 @@ export default function Log() {
     event.preventDefault();
     if (!workout || exerciseId === null) return;
     try {
-      await api.addSet(workout.id, {
+      const added = await api.addSet(workout.id, {
         exercise_id: exerciseId,
         weight_kg: weight ? Number(weight) : null,
         reps: reps ? Number(reps) : null,
@@ -149,6 +230,9 @@ export default function Log() {
       const seconds = isWarmup ? 60 : (planned?.rest_s ?? 120);
       setRest({ endsAt: Date.now() + seconds * 1000, total: seconds * 1000 });
       setRpe("");
+      // A new set replaces the last alert, whether or not it broke anything.
+      const broke = await api.setRecords(added.id);
+      setRecords(broke.records.length ? broke : null);
       // Following a plan, the next set is usually the same again.
       if (!plan?.entries.some((e) => e.exercise_id === exerciseId)) setReps("");
       await refresh();
@@ -169,6 +253,20 @@ export default function Log() {
   return (
     <div className="stack">
       {rest && <RestTimer endsAt={rest.endsAt} total={rest.total} onChange={onRest} />}
+
+      {records && (
+        <div className="record">
+          <div className="card-head">
+            <strong>🏆 New PR · {records.exercise}</strong>
+            <button className="link" onClick={() => setRecords(null)}>
+              ok
+            </button>
+          </div>
+          {records.records.map((r) => (
+            <div key={r.kind}>{recordLine(r)}</div>
+          ))}
+        </div>
+      )}
 
       {plan && (
         <section>
@@ -277,7 +375,18 @@ export default function Log() {
               </tr>
             </thead>
             <tbody>
-              {workout.sets.map((s) => (
+              {workout.sets.map((s) =>
+                editing === s.id ? (
+                  <EditRow
+                    key={s.id}
+                    set={s}
+                    name={nameOf(s.exercise_id)}
+                    onDone={() => {
+                      setEditing(null);
+                      refresh();
+                    }}
+                  />
+                ) : (
                 <tr key={s.id} className={s.is_warmup ? "muted" : ""}>
                   <td>{s.position}</td>
                   <td>{nameOf(s.exercise_id)}</td>
@@ -285,6 +394,9 @@ export default function Log() {
                   <td>{s.reps ?? "—"}</td>
                   <td>{s.rpe ?? "—"}</td>
                   <td>
+                    <button onClick={() => setEditing(s.id)} className="link">
+                      edit
+                    </button>{" "}
                     <button
                       onClick={() => api.deleteSet(s.id).then(refresh)}
                       className="link"
@@ -293,7 +405,8 @@ export default function Log() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                ),
+              )}
             </tbody>
           </table>
         )}

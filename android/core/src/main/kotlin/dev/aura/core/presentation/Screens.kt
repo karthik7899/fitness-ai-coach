@@ -7,7 +7,11 @@ import dev.aura.core.Db
 import dev.aura.core.ExerciseDay
 import dev.aura.core.ExerciseTotal
 import dev.aura.core.Metrics
+import dev.aura.core.MuscleSets
 import dev.aura.core.MuscleVolume
+import dev.aura.core.Muscles
+import dev.aura.core.Record
+import dev.aura.core.Records
 import dev.aura.core.Plan
 import dev.aura.core.Settings
 import dev.aura.core.Template
@@ -28,6 +32,8 @@ data class DashboardState(
     val templates: List<Template> = emptyList(),
     /** The template started today, if any, so its card can say "Continue". */
     val activeTemplate: String? = null,
+    /** Working sets per muscle over the last seven days. */
+    val muscleSets: List<MuscleSets> = emptyList(),
 )
 
 data class TrendsState(
@@ -94,6 +100,7 @@ class Store(private val db: Db) {
             recent = summary.recentWorkouts,
             templates = Workouts.templates,
             activeTemplate = Workouts.plan(db, today)?.template?.id,
+            muscleSets = Muscles.lastSevenDays(db, today),
         )
     }
 
@@ -187,7 +194,7 @@ class Store(private val db: Db) {
         isWarmup: Boolean = false,
         day: LocalDate = LocalDate.now(),
         rpe: Double? = null,
-    ) {
+    ): Int {
         val name = exercise.trim()
         require(name.isNotEmpty()) { "An exercise needs a name." }
 
@@ -229,6 +236,19 @@ class Store(private val db: Db) {
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             listOf(workoutId, exerciseId, position, weightKg, reps, rpe, if (isWarmup) 1 else 0),
+        )
+        return lastId()
+    }
+
+    /** The personal records a set broke, with its exercise's name. */
+    fun records(setId: Int): Pair<String, List<Record>>? = Records.forSet(db, setId)
+
+    /** Correct a logged set. Its exercise, workout and place in it stay. */
+    fun updateSet(id: Int, weightKg: Double?, reps: Int?, rpe: Double?, isWarmup: Boolean) {
+        require(rpe == null || rpe in 1.0..10.0) { "RPE runs from 1 to 10." }
+        db.execute(
+            "UPDATE sets SET weight_kg = ?, reps = ?, rpe = ?, is_warmup = ? WHERE id = ?",
+            listOf(weightKg, reps, rpe, if (isWarmup) 1 else 0, id),
         )
     }
 

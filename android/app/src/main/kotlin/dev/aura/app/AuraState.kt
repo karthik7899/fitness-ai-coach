@@ -145,9 +145,25 @@ class AuraState(
         rpe: Double? = null,
         restSeconds: Int? = null,
     ) = load {
-        onIo { store.addSet(exercise, weightKg, reps, isWarmup, rpe = rpe) }
+        val id = onIo { store.addSet(exercise, weightKg, reps, isWarmup, rpe = rpe) }
         log = onIo { store.log() }
+        // A new set replaces the last alert, whether or not it broke anything.
+        records = onIo { store.records(id) }?.takeIf { it.second.isNotEmpty() }
         restSeconds?.let(::startRest)
+    }
+
+    /** The records the last set broke, with its exercise's name; null if none. */
+    var records by mutableStateOf<Pair<String, List<dev.aura.core.Record>>?>(null)
+        private set
+
+    fun dismissRecords() {
+        records = null
+    }
+
+    /** Correct a logged set. No record alert: this fixes history, it is not a new set. */
+    fun updateSet(id: Int, weightKg: Double?, reps: Int?, rpe: Double?, isWarmup: Boolean) = load {
+        onIo { store.updateSet(id, weightKg, reps, rpe, isWarmup) }
+        log = onIo { store.log() }
     }
 
     // ----------------------------------------------------------------------

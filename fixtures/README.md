@@ -44,9 +44,11 @@ the timezone doing the bucketing — correct behaviour (you want the steps on th
 day you walked them), but it means a fixture would otherwise give different
 answers in different places. Both suites pin UTC for these tests.
 
-## Progression
+## Progression and records
 
-`progression.json` is different from the rest: it is hand-written, because it
-*is* the specification of the progression rule, case by case. Both
-`api/tests/test_progression.py` and `ProgressionTest.kt` run every case, so a
-change to the rule means changing this file first.
+`progression.json` and `records.json` are different from the rest. They are
+hand-written, because each one *is* the specification of a rule, case by case:
+what to lift next time, and what counts as a personal record. Both test suites
+run every case (`test_progression.py` and `ProgressionTest.kt`,
+`test_records.py` and `RecordsTest.kt`), so changing a rule means changing its
+file first.

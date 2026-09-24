@@ -1,0 +1,65 @@
+{
+  "_comment": "The personal-record rule, as cases both apps must agree on: api/tests/test_records.py and android RecordsTest.kt. Hand-written: this file is the specification. `before` is every earlier working set of the exercise as [weight_kg, reps]; `set` is the one just logged. e1RM is Epley, weight × (1 + reps / 30), for 1–12 reps, rounded to 2 places: the same formula as v_sets_enriched.",
+  "cases": [
+    {
+      "name": "a first set is not a record: there is nothing to beat",
+      "before": [],
+      "set": [100, 5],
+      "expect": []
+    },
+    {
+      "name": "heavier than ever, and so a better estimated 1RM",
+      "before": [[100, 5], [95, 8]],
+      "set": [105, 5],
+      "expect": [["weight", 105, 100], ["e1rm", 122.5, 120.33]]
+    },
+    {
+      "name": "more reps at the same weight: a rep record and a better 1RM",
+      "before": [[100, 5], [100, 6]],
+      "set": [100, 8],
+      "expect": [["e1rm", 126.67, 120], ["reps", 8, 6]]
+    },
+    {
+      "name": "reps count against anything at that weight or heavier",
+      "before": [[100, 9], [90, 12]],
+      "set": [95, 10],
+      "expect": [["reps", 10, 9]]
+    },
+    {
+      "name": "equal is not better",
+      "before": [[100, 8]],
+      "set": [100, 8],
+      "expect": []
+    },
+    {
+      "name": "a lighter set with more reps can still be the best 1RM",
+      "before": [[100, 5]],
+      "set": [90, 10],
+      "expect": [["e1rm", 120, 116.67], ["reps", 10, 5]]
+    },
+    {
+      "name": "no rep record at a weight never lifted before; the weight record says it",
+      "before": [[80, 12]],
+      "set": [90, 6],
+      "expect": [["weight", 90, 80]]
+    },
+    {
+      "name": "past twelve reps there is no 1RM estimate, but reps still count",
+      "before": [[60, 12]],
+      "set": [60, 15],
+      "expect": [["reps", 15, 12]]
+    },
+    {
+      "name": "bodyweight: reps are the record",
+      "before": [[null, 8], [null, 10]],
+      "set": [null, 12],
+      "expect": [["reps", 12, 10]]
+    },
+    {
+      "name": "bodyweight after weighted sets: the weighted ones count as heavier",
+      "before": [[10, 12]],
+      "set": [null, 12],
+      "expect": []
+    }
+  ]
+}

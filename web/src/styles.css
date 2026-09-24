@@ -364,6 +364,73 @@ button.link {
   background: var(--accent);
 }
 
+.record {
+  background: var(--panel);
+  border: 1px solid var(--status-good);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.record strong {
+  color: var(--status-good);
+}
+
+tr.editing input[type="number"] {
+  width: 70px;
+}
+
+.muscles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.muscle {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.muscle .bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.muscle .bar > span {
+  display: block;
+  height: 100%;
+  background: var(--muted);
+}
+
+.muscle .count {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.muscle.on_target .bar > span {
+  background: var(--status-good);
+}
+
+.muscle.on_target .count {
+  color: var(--status-good);
+}
+
+.muscle.over .bar > span {
+  background: var(--status-serious);
+}
+
+.muscle.over .count {
+  color: var(--status-serious);
+}
+
 /* ---------- charts ---------- */
 
 .chart {
