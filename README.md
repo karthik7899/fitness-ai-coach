@@ -65,13 +65,20 @@ The tool specs in `agent/tools.py` are plain JSON Schema and carry no provider
 types; only `agent/coach.py` knows about Gemini, so swapping providers is one
 file.
 
-**Starter workouts.** The Dashboard offers six plain sessions: Full body A
-and B, Push, Pull, Legs, and No equipment. Starting one creates any of its
-exercises that are missing, with their muscles, and makes it today's plan. The
-Log screen then shows it as a checklist. Tapping an exercise fills in the
+**Starter workouts.** The Dashboard offers one plain session per body part:
+Chest, Back, Shoulders, Legs, Triceps and Biceps. Starting one creates any of
+its exercises that are missing, with their muscles, and makes it today's plan.
+The Log screen then shows it as a checklist. Tapping an exercise fills in the
 target reps and the weight you used last time, and each exercise counts your
-working sets toward its target. The templates live in `api/app/workouts.py`
-and are generated into the Android app, so both apps offer the same sessions.
+working sets toward its target.
+
+Exercises are matched by alias as well as by name, ignoring case, spaces and
+punctuation. So the plan's "Bench Press" logs to the "Flat Barbell Bench Press"
+an imported FitNotes history already has, and the history carries on. Where
+several names exist, the one with the most sets wins. The templates live in
+`api/app/workouts.py` and the aliases in `api/app/seed.py`. Both are generated
+into the Android app, so the two apps offer the same sessions and match names
+the same way.
 
 **5. Two databases, one schema.** On a phone the database is SQLite — a file the
 server opens, with no daemon to keep alive, which removes the most fragile part

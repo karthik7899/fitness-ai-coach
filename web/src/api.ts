@@ -106,7 +106,9 @@ export interface Template {
 }
 
 export interface PlanEntry {
+  /** As it exists in the database, which may be an alias of `planned`. */
   exercise: string;
+  planned: string;
   exercise_id: number | null;
   sets: number;
   reps: number;

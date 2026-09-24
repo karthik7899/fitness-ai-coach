@@ -91,6 +91,8 @@ export default function Log() {
                     <span className="muted small">
                       {" "}
                       {entry.sets} × {entry.reps}
+                      {entry.exercise.toLowerCase() !== entry.planned.toLowerCase() &&
+                        ` · for ${entry.planned}`}
                       {entry.last_weight_kg !== null && ` · last ${entry.last_weight_kg} kg`}
                     </span>
                   </span>

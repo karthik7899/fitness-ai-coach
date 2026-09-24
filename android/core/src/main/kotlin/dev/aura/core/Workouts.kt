@@ -26,11 +26,15 @@ data class CatalogueEntry(
     val category: String,
     val modality: String,
     val muscles: List<String>,
+    val aliases: List<String> = emptyList(),
 )
 
 /** Where one exercise of today's plan stands. */
 data class PlanEntry(
+    /** The exercise as it exists here, which may be an alias of [planned]. */
     val exercise: String,
+    /** The template's name for it. */
+    val planned: String,
     val sets: Int,
     val reps: Int,
     /** Working sets of it logged today, from any source. */
@@ -55,6 +59,9 @@ data class Plan(val template: Template, val day: LocalDate, val entries: List<Pl
  * sessions and create their exercises with the same muscles. Starting one
  * logs nothing: it makes sure the exercises exist and marks the template as
  * today's plan, under the same settings key the desktop app uses.
+ *
+ * Exercises are matched by name and by alias, so a template's "Bench Press"
+ * is the "Flat Barbell Bench Press" an imported history already has.
  */
 object Workouts {
 
@@ -84,6 +91,46 @@ object Workouts {
 
     fun template(id: String): Template? = templates.firstOrNull { it.id == id }
 
+    private val notAlphanumeric = Regex("[^a-z0-9]+")
+
+    /** "Pull-Up", "pull up" and "Pullup" compare equal, as in workouts.normalise. */
+    fun normalise(name: String): String = notAlphanumeric.replace(name.lowercase(), "")
+
+    /** The template's name for an exercise, then its aliases, in preference order. */
+    fun namesFor(exercise: String): List<String> {
+        val entry = document.catalogue.firstOrNull { it.name.equals(exercise, ignoreCase = true) }
+        return listOf(exercise) + entry?.aliases.orEmpty()
+    }
+
+    private data class Match(val id: Int, val name: String, val sets: Int, val rank: Int)
+
+    /**
+     * The existing exercise a template's exercise means, as (id, name).
+     *
+     * Any exercise under its name or an alias counts. When several do, the one
+     * with the most working sets wins, since that is where the history is; a
+     * tie goes to the earlier name in the alias list, then to the older row.
+     * The same rule as workouts.resolve, which WorkoutsTest pins.
+     */
+    fun resolve(db: Db, exercise: String): Pair<Int, String>? {
+        val rank = HashMap<String, Int>()
+        namesFor(exercise).forEachIndexed { i, name -> rank.putIfAbsent(normalise(name), i) }
+        val best =
+            db.select(
+                """
+                SELECT e.id, e.name, COUNT(s.id) AS sets
+                FROM exercises e
+                LEFT JOIN sets s ON s.exercise_id = e.id AND s.is_warmup = 0
+                GROUP BY e.id, e.name
+                """
+            ) { Match(it.int("id"), it.string("name"), it.int("sets"), -1) }
+                .mapNotNull { m -> rank[normalise(m.name)]?.let { m.copy(rank = it) } }
+                .maxWithOrNull(
+                    compareBy<Match> { it.sets }.thenByDescending { it.rank }.thenByDescending { it.id }
+                )
+        return best?.let { it.id to it.name }
+    }
+
     /**
      * Create the template's missing exercises and make it today's plan.
      *
@@ -95,7 +142,7 @@ object Workouts {
         val chosen = template(id) ?: return null
         val catalogue = document.catalogue.associateBy { it.name.lowercase() }
         for (planned in chosen.exercises) {
-            if (exerciseId(db, planned.exercise) != null) continue
+            if (resolve(db, planned.exercise) != null) continue
             val entry = catalogue.getValue(planned.exercise.lowercase())
             db.execute(
                 "INSERT INTO exercises (name, category, modality) VALUES (?, ?, ?)",
@@ -131,9 +178,11 @@ object Workouts {
 
         val entries =
             chosen.exercises.map { planned ->
-                val id = exerciseId(db, planned.exercise)
+                val found = resolve(db, planned.exercise)
+                val id = found?.first
                 PlanEntry(
-                    exercise = planned.exercise,
+                    exercise = found?.second ?: planned.exercise,
+                    planned = planned.exercise,
                     sets = planned.sets,
                     reps = planned.reps,
                     done = id?.let { doneOn(db, it, day) } ?: 0,

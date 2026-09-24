@@ -52,7 +52,7 @@ export default function Dashboard({ onStart }: { onStart: () => void }) {
     <div className="stack">
       {templates.length > 0 && (
         <section>
-          <h2>Workouts</h2>
+          <h2>Workouts by body part</h2>
           <div className="cards">
             {templates.map((t) => (
               <div className="card" key={t.id}>

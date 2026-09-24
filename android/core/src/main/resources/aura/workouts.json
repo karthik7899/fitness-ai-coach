@@ -8,6 +8,12 @@
       "muscles": [
         "quads",
         "glutes"
+      ],
+      "aliases": [
+        "Barbell Squat",
+        "Barbell Back Squat",
+        "Squat",
+        "High Bar Squat"
       ]
     },
     {
@@ -17,6 +23,10 @@
       "muscles": [
         "quads",
         "glutes"
+      ],
+      "aliases": [
+        "Leg Press Machine",
+        "45 Degree Leg Press"
       ]
     },
     {
@@ -26,6 +36,11 @@
       "muscles": [
         "hamstrings",
         "glutes"
+      ],
+      "aliases": [
+        "Barbell Romanian Deadlift",
+        "Stiff-Legged Deadlift",
+        "RDL"
       ]
     },
     {
@@ -36,6 +51,25 @@
         "hamstrings",
         "glutes",
         "lower_back"
+      ],
+      "aliases": [
+        "Barbell Deadlift",
+        "Conventional Deadlift"
+      ]
+    },
+    {
+      "name": "Leg Curl",
+      "category": "Legs",
+      "modality": "weight_reps",
+      "muscles": [
+        "hamstrings"
+      ],
+      "aliases": [
+        "Lying Leg Curl Machine",
+        "Seated Leg Curl Machine",
+        "Lying Leg Curl",
+        "Seated Leg Curl",
+        "Hamstring Curl"
       ]
     },
     {
@@ -44,32 +78,12 @@
       "modality": "weight_reps",
       "muscles": [
         "calves"
-      ]
-    },
-    {
-      "name": "Walking Lunge",
-      "category": "Legs",
-      "modality": "weight_reps",
-      "muscles": [
-        "quads",
-        "glutes"
-      ]
-    },
-    {
-      "name": "Bodyweight Squat",
-      "category": "Legs",
-      "modality": "bodyweight_reps",
-      "muscles": [
-        "quads",
-        "glutes"
-      ]
-    },
-    {
-      "name": "Glute Bridge",
-      "category": "Legs",
-      "modality": "bodyweight_reps",
-      "muscles": [
-        "glutes"
+      ],
+      "aliases": [
+        "Standing Calf Raise Machine",
+        "Seated Calf Raise Machine",
+        "Standing Calf Raise",
+        "Seated Calf Raise"
       ]
     },
     {
@@ -79,6 +93,12 @@
       "muscles": [
         "chest",
         "triceps"
+      ],
+      "aliases": [
+        "Flat Barbell Bench Press",
+        "Barbell Bench Press",
+        "Flat Bench Press",
+        "Bench"
       ]
     },
     {
@@ -88,15 +108,54 @@
       "muscles": [
         "chest",
         "front_delts"
+      ],
+      "aliases": [
+        "Incline Barbell Bench Press",
+        "Incline Bench"
       ]
     },
     {
-      "name": "Push-Up",
+      "name": "Dumbbell Press",
       "category": "Chest",
-      "modality": "bodyweight_reps",
+      "modality": "weight_reps",
       "muscles": [
         "chest",
         "triceps"
+      ],
+      "aliases": [
+        "Flat Dumbbell Bench Press",
+        "Dumbbell Bench Press",
+        "Flat Dumbbell Press"
+      ]
+    },
+    {
+      "name": "Chest Fly",
+      "category": "Chest",
+      "modality": "weight_reps",
+      "muscles": [
+        "chest"
+      ],
+      "aliases": [
+        "Flat Dumbbell Fly",
+        "Dumbbell Fly",
+        "Cable Crossover",
+        "Pec Deck",
+        "Pec Fly"
+      ]
+    },
+    {
+      "name": "Dip",
+      "category": "Chest",
+      "modality": "weighted_bodyweight",
+      "muscles": [
+        "chest",
+        "triceps"
+      ],
+      "aliases": [
+        "Parallel Bar Triceps Dip",
+        "Chest Dip",
+        "Parallel Bar Dip",
+        "Dips"
       ]
     },
     {
@@ -106,15 +165,28 @@
       "muscles": [
         "front_delts",
         "triceps"
+      ],
+      "aliases": [
+        "Standing Barbell Press",
+        "Barbell Overhead Press",
+        "Military Press",
+        "Shoulder Press",
+        "OHP"
       ]
     },
     {
-      "name": "Pike Push-Up",
+      "name": "Dumbbell Shoulder Press",
       "category": "Shoulders",
-      "modality": "bodyweight_reps",
+      "modality": "weight_reps",
       "muscles": [
         "front_delts",
         "triceps"
+      ],
+      "aliases": [
+        "Seated Dumbbell Press",
+        "Seated Dumbbell Shoulder Press",
+        "Arnold Dumbbell Press",
+        "Arnold Press"
       ]
     },
     {
@@ -123,6 +195,26 @@
       "modality": "weight_reps",
       "muscles": [
         "side_delts"
+      ],
+      "aliases": [
+        "Lateral Dumbbell Raise",
+        "Dumbbell Lateral Raise",
+        "Side Raise",
+        "Cable Lateral Raise"
+      ]
+    },
+    {
+      "name": "Rear Delt Fly",
+      "category": "Shoulders",
+      "modality": "weight_reps",
+      "muscles": [
+        "rear_delts"
+      ],
+      "aliases": [
+        "Rear Delt Dumbbell Raise",
+        "Reverse Dumbbell Fly",
+        "Reverse Fly",
+        "Reverse Pec Deck"
       ]
     },
     {
@@ -132,6 +224,10 @@
       "muscles": [
         "rear_delts",
         "upper_back"
+      ],
+      "aliases": [
+        "Cable Face Pull",
+        "Rope Face Pull"
       ]
     },
     {
@@ -141,6 +237,38 @@
       "muscles": [
         "lats",
         "biceps"
+      ],
+      "aliases": [
+        "Pull Up",
+        "Pullup",
+        "Wide Grip Pull Up"
+      ]
+    },
+    {
+      "name": "Chin-Up",
+      "category": "Back",
+      "modality": "weighted_bodyweight",
+      "muscles": [
+        "lats",
+        "biceps"
+      ],
+      "aliases": [
+        "Chin Up",
+        "Chinup"
+      ]
+    },
+    {
+      "name": "Lat Pulldown",
+      "category": "Back",
+      "modality": "weight_reps",
+      "muscles": [
+        "lats",
+        "biceps"
+      ],
+      "aliases": [
+        "Lat Pull Down",
+        "Wide Grip Lat Pulldown",
+        "Cable Lat Pulldown"
       ]
     },
     {
@@ -150,6 +278,25 @@
       "muscles": [
         "upper_back",
         "lats"
+      ],
+      "aliases": [
+        "Bent Over Barbell Row",
+        "Bent Over Row",
+        "Pendlay Row"
+      ]
+    },
+    {
+      "name": "Seated Cable Row",
+      "category": "Back",
+      "modality": "weight_reps",
+      "muscles": [
+        "upper_back",
+        "lats"
+      ],
+      "aliases": [
+        "Seated Row",
+        "Cable Row",
+        "Seated Machine Row"
       ]
     },
     {
@@ -158,6 +305,38 @@
       "modality": "weight_reps",
       "muscles": [
         "biceps"
+      ],
+      "aliases": [
+        "EZ-Bar Curl",
+        "EZ Bar Curl",
+        "Standing Barbell Curl"
+      ]
+    },
+    {
+      "name": "Dumbbell Curl",
+      "category": "Arms",
+      "modality": "weight_reps",
+      "muscles": [
+        "biceps"
+      ],
+      "aliases": [
+        "Alternating Dumbbell Curl",
+        "Seated Dumbbell Curl",
+        "Bicep Curl",
+        "Biceps Curl"
+      ]
+    },
+    {
+      "name": "Hammer Curl",
+      "category": "Arms",
+      "modality": "weight_reps",
+      "muscles": [
+        "biceps",
+        "forearms"
+      ],
+      "aliases": [
+        "Dumbbell Hammer Curl",
+        "Rope Hammer Curl"
       ]
     },
     {
@@ -166,75 +345,77 @@
       "modality": "weight_reps",
       "muscles": [
         "triceps"
+      ],
+      "aliases": [
+        "Rope Push Down",
+        "V-Bar Push Down",
+        "Cable Pushdown",
+        "Tricep Pushdown",
+        "Triceps Push Down"
       ]
     },
     {
-      "name": "Back Extension",
-      "category": "Core",
-      "modality": "bodyweight_reps",
+      "name": "Skull Crusher",
+      "category": "Arms",
+      "modality": "weight_reps",
       "muscles": [
-        "lower_back"
+        "triceps"
+      ],
+      "aliases": [
+        "EZ-Bar Skullcrusher",
+        "Lying Triceps Extension",
+        "Skullcrusher"
+      ]
+    },
+    {
+      "name": "Close-Grip Bench Press",
+      "category": "Arms",
+      "modality": "weight_reps",
+      "muscles": [
+        "triceps",
+        "chest"
+      ],
+      "aliases": [
+        "Close Grip Barbell Bench Press",
+        "Close Grip Bench"
+      ]
+    },
+    {
+      "name": "Overhead Triceps Extension",
+      "category": "Arms",
+      "modality": "weight_reps",
+      "muscles": [
+        "triceps"
+      ],
+      "aliases": [
+        "Cable Overhead Triceps Extension",
+        "Dumbbell Overhead Triceps Extension",
+        "Overhead Tricep Extension"
+      ]
+    },
+    {
+      "name": "Preacher Curl",
+      "category": "Arms",
+      "modality": "weight_reps",
+      "muscles": [
+        "biceps"
+      ],
+      "aliases": [
+        "EZ-Bar Preacher Curl",
+        "Dumbbell Preacher Curl",
+        "Machine Preacher Curl"
       ]
     }
   ],
   "templates": [
     {
-      "id": "full-body-a",
-      "name": "Full body A",
-      "about": "Squat, bench and row. Alternate with B, three days a week.",
-      "exercises": [
-        {
-          "exercise": "Back Squat",
-          "sets": 3,
-          "reps": 5
-        },
-        {
-          "exercise": "Bench Press",
-          "sets": 3,
-          "reps": 5
-        },
-        {
-          "exercise": "Barbell Row",
-          "sets": 3,
-          "reps": 5
-        }
-      ]
-    },
-    {
-      "id": "full-body-b",
-      "name": "Full body B",
-      "about": "Squat, press and deadlift. Alternate with A.",
-      "exercises": [
-        {
-          "exercise": "Back Squat",
-          "sets": 3,
-          "reps": 5
-        },
-        {
-          "exercise": "Overhead Press",
-          "sets": 3,
-          "reps": 5
-        },
-        {
-          "exercise": "Deadlift",
-          "sets": 1,
-          "reps": 5
-        }
-      ]
-    },
-    {
-      "id": "push",
-      "name": "Push",
-      "about": "Chest, shoulders and triceps.",
+      "id": "chest",
+      "name": "Chest",
+      "about": "Flat and incline pressing, then fly and dips.",
       "exercises": [
         {
           "exercise": "Bench Press",
           "sets": 4,
-          "reps": 8
-        },
-        {
-          "exercise": "Overhead Press",
-          "sets": 3,
           "reps": 8
         },
         {
@@ -243,21 +424,26 @@
           "reps": 10
         },
         {
-          "exercise": "Lateral Raise",
+          "exercise": "Dumbbell Press",
+          "sets": 3,
+          "reps": 10
+        },
+        {
+          "exercise": "Chest Fly",
           "sets": 3,
           "reps": 12
         },
         {
-          "exercise": "Triceps Pushdown",
+          "exercise": "Dip",
           "sets": 3,
-          "reps": 12
+          "reps": 10
         }
       ]
     },
     {
-      "id": "pull",
-      "name": "Pull",
-      "about": "Back, rear delts and biceps.",
+      "id": "back",
+      "name": "Back",
+      "about": "A hinge, a vertical pull and two rows.",
       "exercises": [
         {
           "exercise": "Deadlift",
@@ -275,14 +461,46 @@
           "reps": 8
         },
         {
-          "exercise": "Face Pull",
+          "exercise": "Lat Pulldown",
+          "sets": 3,
+          "reps": 10
+        },
+        {
+          "exercise": "Seated Cable Row",
+          "sets": 3,
+          "reps": 12
+        }
+      ]
+    },
+    {
+      "id": "shoulders",
+      "name": "Shoulders",
+      "about": "Pressing, then front, side and rear delts.",
+      "exercises": [
+        {
+          "exercise": "Overhead Press",
+          "sets": 4,
+          "reps": 8
+        },
+        {
+          "exercise": "Dumbbell Shoulder Press",
+          "sets": 3,
+          "reps": 10
+        },
+        {
+          "exercise": "Lateral Raise",
+          "sets": 3,
+          "reps": 12
+        },
+        {
+          "exercise": "Rear Delt Fly",
           "sets": 3,
           "reps": 15
         },
         {
-          "exercise": "Barbell Curl",
+          "exercise": "Face Pull",
           "sets": 3,
-          "reps": 12
+          "reps": 15
         }
       ]
     },
@@ -307,9 +525,9 @@
           "reps": 10
         },
         {
-          "exercise": "Walking Lunge",
+          "exercise": "Leg Curl",
           "sets": 3,
-          "reps": 10
+          "reps": 12
         },
         {
           "exercise": "Calf Raise",
@@ -319,32 +537,64 @@
       ]
     },
     {
-      "id": "no-equipment",
-      "name": "No equipment",
-      "about": "Bodyweight only, for home or travel.",
+      "id": "triceps",
+      "name": "Triceps",
+      "about": "A heavy compound, then all three heads.",
       "exercises": [
         {
-          "exercise": "Push-Up",
-          "sets": 3,
-          "reps": 12
-        },
-        {
-          "exercise": "Bodyweight Squat",
-          "sets": 3,
-          "reps": 15
-        },
-        {
-          "exercise": "Glute Bridge",
-          "sets": 3,
-          "reps": 15
-        },
-        {
-          "exercise": "Pike Push-Up",
+          "exercise": "Close-Grip Bench Press",
           "sets": 3,
           "reps": 8
         },
         {
-          "exercise": "Back Extension",
+          "exercise": "Dip",
+          "sets": 3,
+          "reps": 10
+        },
+        {
+          "exercise": "Skull Crusher",
+          "sets": 3,
+          "reps": 10
+        },
+        {
+          "exercise": "Triceps Pushdown",
+          "sets": 3,
+          "reps": 12
+        },
+        {
+          "exercise": "Overhead Triceps Extension",
+          "sets": 3,
+          "reps": 12
+        }
+      ]
+    },
+    {
+      "id": "biceps",
+      "name": "Biceps",
+      "about": "Chin-ups, then curls in three grips.",
+      "exercises": [
+        {
+          "exercise": "Chin-Up",
+          "sets": 3,
+          "reps": 8
+        },
+        {
+          "exercise": "Barbell Curl",
+          "sets": 3,
+          "reps": 10
+        },
+        {
+          "exercise": "Dumbbell Curl",
+          "sets": 3,
+          "reps": 12
+        },
+        {
+          "exercise": "Hammer Curl",
+          "sets": 3,
+          "reps": 12
+        },
+        {
+          "exercise": "Preacher Curl",
           "sets": 3,
           "reps": 12
         }

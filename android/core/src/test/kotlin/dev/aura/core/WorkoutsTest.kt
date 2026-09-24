@@ -11,7 +11,8 @@ import org.junit.jupiter.api.Test
 
 /**
  * Starter workouts, as test_workouts.py pins them for the Python app: the
- * same templates, the same exercises created, and the same progress counted.
+ * same templates, the same exercises created or reused by alias, and the same
+ * progress counted.
  */
 class WorkoutsTest {
 
@@ -23,18 +24,32 @@ class WorkoutsTest {
             block(db)
         }
 
-    private fun Plan.entry(name: String) = entries.first { it.exercise == name }
+    private fun Plan.entry(planned: String) = entries.first { it.planned == planned }
+
+    private fun Db.addExercise(name: String): Int {
+        execute("INSERT INTO exercises (name, category, modality) VALUES (?, 'Chest', 'weight_reps')", listOf(name))
+        return lastInsertRowId()
+    }
 
     @Test
-    fun `the generated templates load and use only catalogue exercises`() {
-        val ids = Workouts.templates.map { it.id }
-        assertEquals(listOf("full-body-a", "full-body-b", "push", "pull", "legs", "no-equipment"), ids)
+    fun `there is one workout per body part`() {
+        assertEquals(
+            listOf("Chest", "Back", "Shoulders", "Legs", "Triceps", "Biceps"),
+            Workouts.templates.map { it.name },
+        )
         assertTrue(Workouts.templates.all { t -> t.exercises.all { it.sets > 0 && it.reps > 0 } })
     }
 
     @Test
+    fun `names compare without case, spaces or punctuation`() {
+        assertEquals("pullup", Workouts.normalise("Pull-Up"))
+        assertEquals(Workouts.normalise("pull up"), Workouts.normalise("Pullup"))
+        assertEquals(Workouts.normalise("EZ-Bar Curl"), Workouts.normalise("ez bar curl"))
+    }
+
+    @Test
     fun `starting creates missing exercises with their muscles`() = withDb { db ->
-        Workouts.start(db, "full-body-a", day)
+        Workouts.start(db, "back", day)
 
         val muscles =
             db.select(
@@ -45,12 +60,6 @@ class WorkoutsTest {
                 """
             ) { it.string("muscle") }
         assertEquals(listOf("lats", "upper_back"), muscles)
-        assertEquals(
-            "Back",
-            db.selectOne("SELECT category FROM exercises WHERE name = 'Barbell Row'") {
-                it.string("category")
-            },
-        )
     }
 
     @Test
@@ -58,13 +67,51 @@ class WorkoutsTest {
         db.execute(
             "INSERT INTO exercises (name, category, modality) VALUES ('back squat', 'Squats', 'weight_reps')"
         )
-        Workouts.start(db, "full-body-a", day)
+        Workouts.start(db, "legs", day)
 
         val squats =
             db.select("SELECT category FROM exercises WHERE lower(name) = 'back squat'") {
                 it.string("category")
             }
         assertEquals(listOf("Squats"), squats)
+    }
+
+    @Test
+    fun `an alias is used instead of creating a duplicate`() = JdbcDb.inMemory().use { db ->
+        val imported = db.addExercise("Flat Barbell Bench Press")
+        db.addWorkout(day.minusDays(3), listOf(SetSpec("Flat Barbell Bench Press", 80.0, 8)))
+
+        val plan = assertNotNull(Workouts.start(db, "chest", day))
+
+        val benches =
+            db.select("SELECT name FROM exercises WHERE lower(name) LIKE '%bench press'") {
+                it.string("name")
+            }
+        assertFalse("Bench Press" in benches)
+        val first = plan.entries.first()
+        assertEquals("Bench Press", first.planned)
+        assertEquals("Flat Barbell Bench Press", first.exercise)
+        assertEquals(80.0, first.lastWeightKg)
+        assertEquals(imported to "Flat Barbell Bench Press", Workouts.resolve(db, "Bench Press"))
+    }
+
+    @Test
+    fun `where several names exist the one with history wins`() = JdbcDb.inMemory().use { db ->
+        db.addExercise("Bench Press")
+        val imported = db.addExercise("Flat Barbell Bench Press")
+        db.addWorkout(day.minusDays(5), listOf(SetSpec("Bench Press", 60.0, 8)))
+        db.addWorkout(
+            day.minusDays(3),
+            listOf(SetSpec("Flat Barbell Bench Press", 80.0, 8), SetSpec("Flat Barbell Bench Press", 80.0, 8)),
+        )
+        assertEquals(imported, Workouts.resolve(db, "Bench Press")?.first)
+    }
+
+    @Test
+    fun `with no history the template's own name wins`() = JdbcDb.inMemory().use { db ->
+        db.addExercise("Barbell Bench Press")
+        db.addExercise("Bench Press")
+        assertEquals("Bench Press", Workouts.resolve(db, "Bench Press")?.second)
     }
 
     @Test
@@ -75,7 +122,7 @@ class WorkoutsTest {
 
     @Test
     fun `progress counts today's working sets`() = withDb { db ->
-        Workouts.start(db, "full-body-a", day)
+        Workouts.start(db, "legs", day)
         db.addWorkout(day.minusDays(2), listOf(SetSpec("Back Squat", 95.0, 5)))
         db.addWorkout(
             day,
@@ -88,16 +135,15 @@ class WorkoutsTest {
         )
 
         val plan = assertNotNull(Workouts.plan(db, day))
-        assertEquals("full-body-a", plan.template.id)
+        assertEquals("legs", plan.template.id)
         assertEquals(2, plan.entry("Back Squat").done)
-        assertEquals(1, plan.entry("Bench Press").done)
-        assertEquals(0, plan.entry("Barbell Row").done)
+        assertEquals(0, plan.entry("Leg Press").done)
         assertFalse(plan.complete)
     }
 
     @Test
     fun `last weight is the most recent working set`() = withDb { db ->
-        Workouts.start(db, "full-body-a", day)
+        Workouts.start(db, "legs", day)
         db.addWorkout(day.minusDays(7), listOf(SetSpec("Back Squat", 90.0, 5)))
         db.addWorkout(
             day.minusDays(2),
@@ -110,12 +156,12 @@ class WorkoutsTest {
 
         val plan = assertNotNull(Workouts.plan(db, day))
         assertEquals(97.5, plan.entry("Back Squat").lastWeightKg)
-        assertNull(plan.entry("Barbell Row").lastWeightKg)
+        assertNull(plan.entry("Leg Press").lastWeightKg)
     }
 
     @Test
     fun `a plan lasts only the day it was started, and finishing clears it`() = withDb { db ->
-        Workouts.start(db, "full-body-a", day)
+        Workouts.start(db, "legs", day)
         assertNotNull(Workouts.plan(db, day))
         assertNull(Workouts.plan(db, day.plusDays(1)))
 
@@ -146,8 +192,8 @@ class WorkoutsTest {
         // Exactly what settings_store.put writes for a plan started on the desktop.
         db.execute(
             "INSERT INTO app_settings (\"key\", value) VALUES ('workout', ?)",
-            listOf("""{"template": "push", "day": "$day"}"""),
+            listOf("""{"template": "shoulders", "day": "$day"}"""),
         )
-        assertEquals("push", Workouts.plan(db, day)?.template?.id)
+        assertEquals("shoulders", Workouts.plan(db, day)?.template?.id)
     }
 }

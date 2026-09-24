@@ -68,7 +68,7 @@ fun DashboardScreen(state: DashboardState?, app: AuraState) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (state.templates.isNotEmpty()) {
-            SectionTitle("Workouts")
+            SectionTitle("Workouts by body part")
             for (template in state.templates) {
                 TemplateCard(
                     template = template,
@@ -418,6 +418,10 @@ private fun PlanSection(
                     Text(
                         buildString {
                             append("${entry.sets} × ${entry.reps}")
+                            // Your own name for it, from an import, may differ from the plan's.
+                            if (!entry.exercise.equals(entry.planned, ignoreCase = true)) {
+                                append("  ·  for ${entry.planned}")
+                            }
                             entry.lastWeightKg?.let { append("  ·  last ${Format.kg(it)}") }
                         },
                         color = AuraColors.Muted,
