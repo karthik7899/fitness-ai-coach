@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from app import workouts
-from app.models import Exercise
+from app.models import Exercise, SetEntry, Workout
 from app.seed import ALIASES, CATALOGUE
 from tests.conftest import add_workout
 
@@ -49,9 +49,10 @@ def test_every_template_exercise_is_in_the_catalogue():
 
 def test_no_alias_belongs_to_two_exercises():
     owners: dict[str, str] = {}
-    for name, aliases in ALIASES.items():
-        assert name in {n for n, *_ in CATALOGUE}, f"aliases for unknown {name}"
-        for alias in [name, *aliases]:
+    known = {n for n, *_ in CATALOGUE}
+    assert set(ALIASES) <= known, f"aliases for unknown {set(ALIASES) - known}"
+    for name in known:
+        for alias in [name, *ALIASES.get(name, [])]:
             key = workouts.normalise(alias)
             assert owners.setdefault(key, name) == name, (
                 f"{alias!r} means both {owners[key]} and {name}"
@@ -183,6 +184,89 @@ def test_finishing_clears_the_plan(started):
 
 
 # --------------------------------------------------------------------------
+# Merging duplicates
+# --------------------------------------------------------------------------
+
+
+def imported_workout(session, day, sets):
+    """Like add_workout, but from an import rather than logged by hand."""
+    workout = Workout(performed_on=day, source="fitnotes", external_id=str(day))
+    session.add(workout)
+    session.flush()
+    for position, (exercise, weight, reps) in enumerate(sets, start=1):
+        session.add(SetEntry(workout_id=workout.id, exercise_id=exercise.id,
+                             position=position, weight_kg=weight, reps=reps, is_warmup=False))
+    session.flush()
+
+
+@pytest.fixture
+def duplicated(session):
+    # What an earlier workout could leave behind: "Bench Press", created with
+    # the catalogue's muscles and used for two sets, beside the imported
+    # "Flat Barbell Bench Press", which has one imported set and no muscles.
+    fresh = Exercise(name="Bench Press", category="Chest", primary_muscles=["chest", "triceps"])
+    imported = Exercise(name="Flat Barbell Bench Press", category=None)
+    session.add_all([fresh, imported])
+    session.flush()
+    add_workout(session, TODAY, [(fresh, 80, 8, False), (fresh, 80, 8, False)])
+    imported_workout(session, TODAY - dt.timedelta(days=3), [(imported, 77.5, 8)])
+    session.commit()
+    return fresh.id, imported.id
+
+
+def test_duplicates_are_found_and_the_imported_one_is_kept(session, duplicated):
+    fresh, imported = duplicated
+    [merge] = workouts.duplicates(session)
+    # Imported history wins even though the other has more sets.
+    assert merge.keep.id == imported
+    assert [c.id for c in merge.drop] == [fresh]
+
+
+def test_merging_moves_the_sets_and_deletes_the_duplicate(session, duplicated):
+    fresh, imported = duplicated
+    merged = workouts.merge_duplicates(session)
+
+    assert len(merged) == 1
+    assert session.get(Exercise, fresh) is None
+    kept = session.get(Exercise, imported)
+    assert kept.name == "Flat Barbell Bench Press"
+    assert session.scalar(
+        select(func.count()).select_from(SetEntry).where(SetEntry.exercise_id == imported)
+    ) == 3
+    # It had no muscles or category of its own, so it takes the duplicate's.
+    assert sorted(kept.primary_muscles) == ["chest", "triceps"]
+    assert kept.category == "Chest"
+    assert workouts.duplicates(session) == []
+
+
+def test_the_kept_exercise_keeps_its_own_muscles(session):
+    kept = Exercise(name="Barbell Squat", category="Legs", primary_muscles=["quads"])
+    other = Exercise(name="Back Squat", category="Legs", primary_muscles=["quads", "glutes"])
+    session.add_all([kept, other])
+    session.flush()
+    imported_workout(session, TODAY, [(kept, 100, 5)])
+    session.commit()
+
+    workouts.merge_duplicates(session)
+    assert session.get(Exercise, kept.id).primary_muscles == ["quads"]
+
+
+def test_names_that_only_look_alike_are_not_merged(session):
+    session.add_all([Exercise(name="Bench Press"), Exercise(name="Incline Bench Press")])
+    session.commit()
+    assert workouts.duplicates(session) == []
+
+
+def test_after_merging_the_plan_follows_the_kept_exercise(session, duplicated):
+    _, imported = duplicated
+    workouts.merge_duplicates(session)
+    plan = workouts.start(session, "chest", TODAY)
+    bench = plan["entries"][0]
+    assert bench["exercise_id"] == imported
+    assert bench["done"] == 2
+
+
+# --------------------------------------------------------------------------
 # HTTP
 # --------------------------------------------------------------------------
 
@@ -211,6 +295,17 @@ def test_the_api_lists_starts_and_finishes(client):
 
     assert client.delete("/api/templates/active").status_code == 204
     assert client.get("/api/templates/active").json() is None
+
+
+def test_the_api_lists_and_merges_duplicates(client, duplicated):
+    fresh, imported = duplicated
+    listed = client.get("/api/exercises/duplicates").json()
+    assert listed == [{
+        "keep": {"id": imported, "name": "Flat Barbell Bench Press", "sets": 1},
+        "drop": [{"id": fresh, "name": "Bench Press", "sets": 2}],
+    }]
+    assert client.post("/api/exercises/duplicates/merge").json()["merged"] == 1
+    assert client.get("/api/exercises/duplicates").json() == []
 
 
 def test_the_api_refuses_an_unknown_template(client):

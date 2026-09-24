@@ -24,14 +24,21 @@ class JdbcDb(private val connection: Connection) : Db {
         }
     }
 
-    override fun <T> select(sql: String, args: List<Any?>, map: (Row) -> T): List<T> =
-        connection.prepareStatement(sql).use { statement ->
+    override fun <T> select(sql: String, args: List<Any?>, map: (Row) -> T): List<T> {
+        // The same rule AndroidDb enforces, where rawQuery binds everything as
+        // text. Without it here, a query passing a number works in every test
+        // and throws on the phone.
+        require(args.all { it == null || it is String }) {
+            "select() arguments must be strings on Android: ${args.filterNot { it is String? }}"
+        }
+        return connection.prepareStatement(sql).use { statement ->
             args.forEachIndexed { index, value -> statement.setObject(index + 1, value) }
             statement.executeQuery().use { results ->
                 val row = JdbcRow(results)
                 buildList { while (results.next()) add(map(row)) }
             }
         }
+    }
 
     override fun close() = connection.close()
 

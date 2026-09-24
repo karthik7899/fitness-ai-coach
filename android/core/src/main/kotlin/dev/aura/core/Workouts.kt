@@ -102,34 +102,99 @@ object Workouts {
         return listOf(exercise) + entry?.aliases.orEmpty()
     }
 
-    private data class Match(val id: Int, val name: String, val sets: Int, val rank: Int)
+    /** An existing exercise, with what counts when choosing between its names. */
+    data class Candidate(val id: Int, val name: String, val sets: Int, val imported: Int, val rank: Int)
+
+    // Imported history first, then the most working sets, then the earlier
+    // name in the alias list, then the older row. As workouts.Candidate.key.
+    private val best: Comparator<Candidate> =
+        compareByDescending<Candidate> { it.imported > 0 }
+            .thenByDescending { it.sets }
+            .thenBy { it.rank }
+            .thenBy { it.id }
+
+    private fun existing(db: Db): List<Candidate> =
+        db.select(
+            """
+            SELECT e.id, e.name,
+                   COUNT(s.id) AS sets,
+                   COUNT(CASE WHEN w.source <> 'manual' THEN s.id END) AS imported
+            FROM exercises e
+            LEFT JOIN sets s ON s.exercise_id = e.id AND s.is_warmup = 0
+            LEFT JOIN workouts w ON w.id = s.workout_id
+            GROUP BY e.id, e.name
+            """
+        ) { Candidate(it.int("id"), it.string("name"), it.int("sets"), it.int("imported"), -1) }
+
+    private fun candidates(existing: List<Candidate>, exercise: String): List<Candidate> {
+        val rank = HashMap<String, Int>()
+        namesFor(exercise).forEachIndexed { i, name -> rank.putIfAbsent(normalise(name), i) }
+        return existing
+            .mapNotNull { c -> rank[normalise(c.name)]?.let { c.copy(rank = it) } }
+            .sortedWith(best)
+    }
 
     /**
      * The existing exercise a template's exercise means, as (id, name).
      *
-     * Any exercise under its name or an alias counts. When several do, the one
-     * with the most working sets wins, since that is where the history is; a
-     * tie goes to the earlier name in the alias list, then to the older row.
-     * The same rule as workouts.resolve, which WorkoutsTest pins.
+     * Any exercise under its name or an alias counts. When several do, the
+     * imported one wins, then the one with the most working sets, since that
+     * is where the history is. The same rule as workouts.resolve.
      */
-    fun resolve(db: Db, exercise: String): Pair<Int, String>? {
-        val rank = HashMap<String, Int>()
-        namesFor(exercise).forEachIndexed { i, name -> rank.putIfAbsent(normalise(name), i) }
-        val best =
-            db.select(
-                """
-                SELECT e.id, e.name, COUNT(s.id) AS sets
-                FROM exercises e
-                LEFT JOIN sets s ON s.exercise_id = e.id AND s.is_warmup = 0
-                GROUP BY e.id, e.name
-                """
-            ) { Match(it.int("id"), it.string("name"), it.int("sets"), -1) }
-                .mapNotNull { m -> rank[normalise(m.name)]?.let { m.copy(rank = it) } }
-                .maxWithOrNull(
-                    compareBy<Match> { it.sets }.thenByDescending { it.rank }.thenByDescending { it.id }
-                )
-        return best?.let { it.id to it.name }
+    fun resolve(db: Db, exercise: String): Pair<Int, String>? =
+        candidates(existing(db), exercise).firstOrNull()?.let { it.id to it.name }
+
+    /** A catalogue exercise found under more than one of its names. */
+    data class Merge(val keep: Candidate, val drop: List<Candidate>)
+
+    /** Catalogue exercises that exist under more than one name, and which to keep. */
+    fun duplicates(db: Db): List<Merge> {
+        val all = existing(db)
+        val claimed = HashSet<Int>()
+        return document.catalogue.mapNotNull { entry ->
+            val found = candidates(all, entry.name).filter { it.id !in claimed }
+            if (found.size < 2) return@mapNotNull null
+            claimed += found.map { it.id }
+            Merge(found.first(), found.drop(1))
+        }
     }
+
+    /**
+     * Fold each duplicate into the exercise [duplicates] chose to keep: its
+     * sets move across and it is deleted. The kept exercise keeps its own
+     * name, category and muscles, taking the duplicate's only where it has
+     * none. All or nothing, as workouts.merge_duplicates.
+     */
+    fun mergeDuplicates(db: Db): List<Merge> =
+        db.transaction {
+            val merges = duplicates(db)
+            for (merge in merges) {
+                val keep = merge.keep.id
+                for (drop in merge.drop.map { it.id }) {
+                    db.execute("UPDATE sets SET exercise_id = ? WHERE exercise_id = ?", listOf(keep, drop))
+                    db.execute(
+                        """
+                        INSERT INTO exercise_muscles (exercise_id, muscle, is_primary)
+                        SELECT ?, muscle, is_primary FROM exercise_muscles
+                        WHERE exercise_id = ?
+                          AND NOT EXISTS (SELECT 1 FROM exercise_muscles WHERE exercise_id = ?)
+                        """,
+                        listOf(keep, drop, keep),
+                    )
+                    db.execute(
+                        """
+                        UPDATE exercises
+                        SET category = (SELECT category FROM exercises WHERE id = ?)
+                        WHERE id = ? AND category IS NULL
+                        """,
+                        listOf(drop, keep),
+                    )
+                    db.execute("DELETE FROM exercise_muscles WHERE exercise_id = ?", listOf(drop))
+                    db.execute("DELETE FROM exercises WHERE id = ?", listOf(drop))
+                }
+            }
+            merges
+        }
 
     /**
      * Create the template's missing exercises and make it today's plan.
@@ -202,9 +267,10 @@ object Workouts {
             """
             SELECT COUNT(*) AS n
             FROM sets s JOIN workouts w ON w.id = s.workout_id
-            WHERE s.exercise_id = ? AND s.is_warmup = 0 AND w.performed_on = ?
+            WHERE s.exercise_id = CAST(? AS INTEGER) AND s.is_warmup = 0 AND w.performed_on = ?
             """,
-            listOf(exerciseId, day.toString()),
+            // Strings only: Android's rawQuery binds every argument as text.
+            listOf(exerciseId.toString(), day.toString()),
         ) { it.int("n") } ?: 0
 
     private fun lastWeight(db: Db, exerciseId: Int): Double? =
@@ -212,10 +278,10 @@ object Workouts {
             """
             SELECT s.weight_kg
             FROM sets s JOIN workouts w ON w.id = s.workout_id
-            WHERE s.exercise_id = ? AND s.is_warmup = 0 AND s.weight_kg IS NOT NULL
+            WHERE s.exercise_id = CAST(? AS INTEGER) AND s.is_warmup = 0 AND s.weight_kg IS NOT NULL
             ORDER BY w.performed_on DESC, s.id DESC
             LIMIT 1
             """,
-            listOf(exerciseId),
+            listOf(exerciseId.toString()),
         ) { it.doubleOrNull("weight_kg") }
 }

@@ -322,6 +322,15 @@ class AuraState(
         refresh()
     }
 
+    /** Fold duplicate exercises into the ones kept, then show what is left. */
+    fun mergeDuplicates() = load {
+        val merged = onIo { store.mergeDuplicates() }
+        settings = onIo { store.settings() }
+        notice =
+            if (merged == 0) "Nothing to merge."
+            else "Merged $merged duplicate exercise${if (merged == 1) "" else "s"}."
+    }
+
     /** Write a consistent copy of the database to wherever the user chose. */
     fun exportBackup(uri: android.net.Uri) = load {
         val info = onIo {

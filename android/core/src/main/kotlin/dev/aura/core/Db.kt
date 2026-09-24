@@ -57,4 +57,21 @@ interface Db : AutoCloseable {
 
     fun <T> selectOne(sql: String, args: List<Any?> = emptyList(), map: (Row) -> T): T? =
         select(sql, args, map).firstOrNull()
+
+    /**
+     * Run [block] all or nothing. Plain SQL here; AndroidDb uses the platform's
+     * own transaction calls, which its connection pool expects.
+     */
+    fun <T> transaction(block: () -> T): T {
+        execute("BEGIN")
+        val result =
+            try {
+                block()
+            } catch (e: Throwable) {
+                execute("ROLLBACK")
+                throw e
+            }
+        execute("COMMIT")
+        return result
+    }
 }

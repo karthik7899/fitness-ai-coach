@@ -18,8 +18,9 @@ from __future__ import annotations
 
 import datetime as dt
 import re
+from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, case, func, select, text
 from sqlalchemy.orm import Session
 
 from app import settings_store
@@ -126,8 +127,11 @@ def names_for(exercise: str) -> list[str]:
 
 
 def document() -> dict:
-    """The templates, and the catalogue entries they use, as plain data."""
-    used = {name for t in TEMPLATES for name, _, _ in t["exercises"]}
+    """The templates and the whole catalogue, aliases included, as plain data.
+
+    The whole catalogue rather than only what the templates use: finding
+    duplicates needs every exercise's aliases.
+    """
     return {
         "catalogue": [
             {
@@ -138,7 +142,6 @@ def document() -> dict:
                 "aliases": ALIASES.get(name, []),
             }
             for name, category, modality, muscles in CATALOGUE
-            if name in used
         ],
         "templates": [
             {
@@ -159,31 +162,135 @@ def template(template_id: str) -> dict | None:
     return next((t for t in document()["templates"] if t["id"] == template_id), None)
 
 
+@dataclass(frozen=True)
+class Candidate:
+    """An existing exercise, with what counts when choosing between names."""
+
+    id: int
+    name: str
+    sets: int
+    imported: int
+    rank: int
+
+    @property
+    def key(self) -> tuple:
+        # Imported history first, then the most working sets, then the
+        # earlier name in the alias list, then the older row.
+        return (self.imported > 0, self.sets, -self.rank, -self.id)
+
+
+def _existing(session: Session) -> list[tuple[int, str, int, int]]:
+    """Every exercise with its working sets, and how many of them were imported."""
+    return [
+        (row.id, row.name, row.sets, row.imported)
+        for row in session.execute(
+            select(
+                Exercise.id,
+                Exercise.name,
+                func.count(SetEntry.id).label("sets"),
+                func.count(case((Workout.source != "manual", SetEntry.id))).label("imported"),
+            )
+            .outerjoin(
+                SetEntry,
+                and_(SetEntry.exercise_id == Exercise.id, SetEntry.is_warmup.is_(False)),
+            )
+            .outerjoin(Workout, Workout.id == SetEntry.workout_id)
+            .group_by(Exercise.id, Exercise.name)
+        )
+    ]
+
+
+def _candidates(existing: list[tuple[int, str, int, int]], exercise: str) -> list[Candidate]:
+    """The existing exercises that go by this catalogue exercise's names, best first."""
+    rank: dict[str, int] = {}
+    for i, name in enumerate(names_for(exercise)):
+        rank.setdefault(normalise(name), i)
+    found = [
+        Candidate(id_, name, sets, imported, rank[normalise(name)])
+        for id_, name, sets, imported in existing
+        if normalise(name) in rank
+    ]
+    return sorted(found, key=lambda c: c.key, reverse=True)
+
+
 def resolve(session: Session, exercise: str) -> Exercise | None:
     """The existing exercise a template's exercise means, if there is one.
 
     Any exercise whose name matches the template's name or one of its aliases
     counts. When several do, as when an earlier workout created "Bench Press"
-    beside an imported "Flat Barbell Bench Press", the one with the most
-    working sets wins, since that is where the history is. A tie goes to the
-    earlier name in the alias list.
+    beside an imported "Flat Barbell Bench Press", the imported one wins, then
+    the one with the most working sets, since that is where the history is.
     """
-    preference = {normalise(n): rank for rank, n in reversed(list(enumerate(names_for(exercise))))}
-    rows = session.execute(
-        select(Exercise, func.count(SetEntry.id))
-        .outerjoin(
-            SetEntry, (SetEntry.exercise_id == Exercise.id) & SetEntry.is_warmup.is_(False)
-        )
-        .group_by(Exercise.id)
-    ).all()
-    matches = [
-        (count, -preference[normalise(row.name)], row)
-        for row, count in rows
-        if normalise(row.name) in preference
-    ]
-    if not matches:
-        return None
-    return max(matches, key=lambda m: (m[0], m[1], -m[2].id))[2]
+    found = _candidates(_existing(session), exercise)
+    return session.get(Exercise, found[0].id) if found else None
+
+
+@dataclass(frozen=True)
+class Merge:
+    keep: Candidate
+    drop: list[Candidate]
+
+    def as_dict(self) -> dict:
+        def one(c: Candidate) -> dict:
+            return {"id": c.id, "name": c.name, "sets": c.sets}
+
+        return {"keep": one(self.keep), "drop": [one(c) for c in self.drop]}
+
+
+def duplicates(session: Session) -> list[Merge]:
+    """Catalogue exercises that exist under more than one of their names."""
+    existing = _existing(session)
+    merges, claimed = [], set()
+    for name, *_ in CATALOGUE:
+        found = [c for c in _candidates(existing, name) if c.id not in claimed]
+        if len(found) > 1:
+            merges.append(Merge(found[0], found[1:]))
+            claimed.update(c.id for c in found)
+    return merges
+
+
+def merge_duplicates(session: Session) -> list[Merge]:
+    """Fold each duplicate into the exercise `duplicates` chose to keep.
+
+    Its sets move across and it is deleted. The kept exercise keeps its own
+    name, category and muscles, taking the duplicate's only where it has none,
+    so an import that brought no muscle mapping gains the catalogue's. One
+    transaction: a failure part-way leaves everything as it was.
+    """
+    merges = duplicates(session)
+    for merge in merges:
+        keep = merge.keep.id
+        for drop in (c.id for c in merge.drop):
+            params = {"keep": keep, "drop": drop}
+            session.execute(
+                text("UPDATE sets SET exercise_id = :keep WHERE exercise_id = :drop"), params
+            )
+            session.execute(
+                text(
+                    """
+                    INSERT INTO exercise_muscles (exercise_id, muscle, is_primary)
+                    SELECT :keep, muscle, is_primary FROM exercise_muscles
+                    WHERE exercise_id = :drop
+                      AND NOT EXISTS (SELECT 1 FROM exercise_muscles WHERE exercise_id = :keep)
+                    """
+                ),
+                params,
+            )
+            session.execute(
+                text(
+                    """
+                    UPDATE exercises
+                    SET category = (SELECT category FROM exercises WHERE id = :drop)
+                    WHERE id = :keep AND category IS NULL
+                    """
+                ),
+                params,
+            )
+            session.execute(text("DELETE FROM exercise_muscles WHERE exercise_id = :drop"), params)
+            session.execute(text("DELETE FROM exercises WHERE id = :drop"), params)
+    session.commit()
+    session.expire_all()
+    return merges
 
 
 def ensure_exercises(session: Session, chosen: dict) -> None:

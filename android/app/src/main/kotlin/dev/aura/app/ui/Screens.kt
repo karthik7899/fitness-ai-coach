@@ -639,6 +639,7 @@ fun SettingsScreen(state: SettingsState?, app: AuraState) {
         }
 
         ImportSection(app)
+        DuplicatesSection(state, app)
         BackupSection(app)
 
         SectionTitle("This build")
@@ -743,6 +744,43 @@ private fun ImportSection(app: AuraState) {
  * anything is replaced, because this is the one action in the app that can
  * destroy data.
  */
+/**
+ * Exercises that exist under more than one name, such as a "Bench Press" a
+ * workout created beside an imported "Flat Barbell Bench Press". Each line
+ * says where the sets go before anything moves.
+ */
+@Composable
+private fun DuplicatesSection(state: SettingsState, app: AuraState) {
+    SectionTitle("Duplicate exercises")
+    if (state.duplicates.isEmpty()) {
+        Muted("None. Every exercise has one name.")
+        return
+    }
+    Muted(
+        "These are the same exercise under different names. Merging moves the sets " +
+            "onto the imported one and removes the other. It cannot be undone, so save " +
+            "a backup first if in doubt."
+    )
+    Panel {
+        for (merge in state.duplicates) {
+            for (drop in merge.drop) {
+                Text(
+                    "${drop.name} (${setCount(drop.sets)}) → ${merge.keep.name} (${setCount(merge.keep.sets)})",
+                    color = AuraColors.Text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(vertical = 2.dp),
+                )
+            }
+        }
+    }
+    Button(onClick = app::mergeDuplicates, enabled = !app.busy) {
+        val count = state.duplicates.sumOf { it.drop.size }
+        Text("Merge $count duplicate${if (count == 1) "" else "s"}")
+    }
+}
+
+private fun setCount(n: Int) = "$n set${if (n == 1) "" else "s"}"
+
 @Composable
 private fun BackupSection(app: AuraState) {
     val save =

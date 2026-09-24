@@ -114,6 +114,111 @@ class WorkoutsTest {
         assertEquals("Bench Press", Workouts.resolve(db, "Bench Press")?.second)
     }
 
+    // ----------------------------------------------------------------------
+    // Merging duplicates, as test_workouts.py
+    // ----------------------------------------------------------------------
+
+    private fun Db.importedWorkout(day: LocalDate, exercise: String, weight: Double, reps: Int) {
+        execute(
+            "INSERT INTO workouts (performed_on, source, external_id) VALUES (?, 'fitnotes', ?)",
+            listOf(day.toString(), day.toString()),
+        )
+        val workout = lastInsertRowId()
+        val exerciseId =
+            selectOne("SELECT id FROM exercises WHERE name = ?", listOf(exercise)) { it.int("id") }!!
+        execute(
+            "INSERT INTO sets (workout_id, exercise_id, position, weight_kg, reps, is_warmup) VALUES (?, ?, 1, ?, ?, 0)",
+            listOf(workout, exerciseId, weight, reps),
+        )
+    }
+
+    private fun Db.muscles(id: Int): List<String> =
+        select("SELECT muscle FROM exercise_muscles WHERE exercise_id = CAST(? AS INTEGER) ORDER BY muscle", listOf(id.toString())) {
+            it.string("muscle")
+        }
+
+    /** "Bench Press" from an earlier workout beside the imported, muscle-less original. */
+    private fun Db.duplicated(): Pair<Int, Int> {
+        val fresh = addExercise("Bench Press")
+        execute("INSERT INTO exercise_muscles (exercise_id, muscle) VALUES (?, 'chest'), (?, 'triceps')", listOf(fresh, fresh))
+        execute("INSERT INTO exercises (name, modality) VALUES ('Flat Barbell Bench Press', 'weight_reps')")
+        val imported = lastInsertRowId()
+        addWorkout(day, listOf(SetSpec("Bench Press", 80.0, 8), SetSpec("Bench Press", 80.0, 8)))
+        importedWorkout(day.minusDays(3), "Flat Barbell Bench Press", 77.5, 8)
+        return fresh to imported
+    }
+
+    @Test
+    fun `duplicates are found and the imported one is kept`() = JdbcDb.inMemory().use { db ->
+        val (fresh, imported) = db.duplicated()
+        val merge = Workouts.duplicates(db).single()
+        // Imported history wins even though the other has more sets.
+        assertEquals(imported, merge.keep.id)
+        assertEquals(listOf(fresh), merge.drop.map { it.id })
+    }
+
+    @Test
+    fun `merging moves the sets and deletes the duplicate`() = JdbcDb.inMemory().use { db ->
+        val (fresh, imported) = db.duplicated()
+        assertEquals(1, Workouts.mergeDuplicates(db).size)
+
+        assertNull(db.selectOne("SELECT id FROM exercises WHERE id = CAST(? AS INTEGER)", listOf(fresh.toString())) { it.int("id") })
+        assertEquals(
+            3,
+            db.selectOne("SELECT COUNT(*) AS n FROM sets WHERE exercise_id = CAST(? AS INTEGER)", listOf(imported.toString())) { it.int("n") },
+        )
+        assertEquals(listOf("chest", "triceps"), db.muscles(imported))
+        assertEquals(
+            "Chest",
+            db.selectOne("SELECT category FROM exercises WHERE id = CAST(? AS INTEGER)", listOf(imported.toString())) { it.string("category") },
+        )
+        assertTrue(Workouts.duplicates(db).isEmpty())
+    }
+
+    @Test
+    fun `the kept exercise keeps its own muscles`() = JdbcDb.inMemory().use { db ->
+        val kept = db.addExercise("Barbell Squat")
+        db.execute("INSERT INTO exercise_muscles (exercise_id, muscle) VALUES (?, 'quads')", listOf(kept))
+        val other = db.addExercise("Back Squat")
+        db.execute("INSERT INTO exercise_muscles (exercise_id, muscle) VALUES (?, 'glutes')", listOf(other))
+        db.importedWorkout(day, "Barbell Squat", 100.0, 5)
+
+        Workouts.mergeDuplicates(db)
+        assertEquals(listOf("quads"), db.muscles(kept))
+    }
+
+    @Test
+    fun `names that only look alike are not merged`() = JdbcDb.inMemory().use { db ->
+        db.addExercise("Bench Press")
+        db.addExercise("Incline Bench Press")
+        assertTrue(Workouts.duplicates(db).isEmpty())
+    }
+
+    @Test
+    fun `a merge that fails part-way changes nothing`() = JdbcDb.inMemory().use { db ->
+        db.duplicated()
+        val before = db.select("SELECT id, exercise_id FROM sets ORDER BY id") { it.int("id") to it.int("exercise_id") }
+        val failing = object : Db by db {
+            override fun execute(sql: String, args: List<Any?>) {
+                if (sql.startsWith("DELETE FROM exercises")) error("disk full")
+                db.execute(sql, args)
+            }
+            override fun <T> transaction(block: () -> T): T = db.transaction(block)
+        }
+        kotlin.runCatching { Workouts.mergeDuplicates(failing) }
+        assertEquals(before, db.select("SELECT id, exercise_id FROM sets ORDER BY id") { it.int("id") to it.int("exercise_id") })
+        assertEquals(1, Workouts.duplicates(db).size)
+    }
+
+    @Test
+    fun `the screens list duplicates and merge them`() = JdbcDb.inMemory().use { db ->
+        db.duplicated()
+        val store = Store(db)
+        assertEquals("Flat Barbell Bench Press", store.settings().duplicates.single().keep.name)
+        assertEquals(1, store.mergeDuplicates())
+        assertTrue(store.settings().duplicates.isEmpty())
+    }
+
     @Test
     fun `an unknown template starts nothing`() = withDb { db ->
         assertNull(Workouts.start(db, "no-such-thing", day))

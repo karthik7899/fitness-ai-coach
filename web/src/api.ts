@@ -123,6 +123,18 @@ export interface Plan {
   entries: PlanEntry[];
 }
 
+export interface DuplicateExercise {
+  id: number;
+  name: string;
+  sets: number;
+}
+
+/** One exercise found under several names: which is kept, which fold into it. */
+export interface Merge {
+  keep: DuplicateExercise;
+  drop: DuplicateExercise[];
+}
+
 export const api = {
   summary: () => request<Summary>("/metrics/summary"),
   load: (start: string, end: string) => request<LoadRow[]>(`/metrics/load?${range(start, end)}`),
@@ -147,6 +159,12 @@ export const api = {
       body: JSON.stringify(body),
     }),
   deleteSet: (setId: number) => request<void>(`/sets/${setId}`, { method: "DELETE" }),
+
+  duplicates: () => request<Merge[]>("/exercises/duplicates"),
+  mergeDuplicates: () =>
+    request<{ merged: number; merges: Merge[] }>("/exercises/duplicates/merge", {
+      method: "POST",
+    }),
 
   templates: () => request<Template[]>("/templates"),
   activePlan: () => request<Plan | null>("/templates/active"),

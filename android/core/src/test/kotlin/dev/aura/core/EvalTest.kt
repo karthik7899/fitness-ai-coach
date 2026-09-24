@@ -67,8 +67,8 @@ class EvalTest {
                         answer = answer,
                         setsAdded = count(db, "SELECT COUNT(*) AS n FROM sets") - setsBefore,
                         notesAdded = db.select(
-                            "SELECT content FROM coach_notes ORDER BY id LIMIT -1 OFFSET ?",
-                            listOf(notesBefore),
+                            "SELECT content FROM coach_notes ORDER BY id LIMIT -1 OFFSET CAST(? AS INTEGER)",
+                            listOf(notesBefore.toString()),
                         ) { it.string("content") },
                     )
                     val failed = score(scenario.obj("expect"), outcome).filterValues { !it }.keys

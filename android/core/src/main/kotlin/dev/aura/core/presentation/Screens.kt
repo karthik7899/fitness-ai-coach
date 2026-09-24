@@ -62,6 +62,8 @@ data class SettingsState(
     val model: String,
     val watchFolders: List<String>,
     val database: Backup.Info,
+    /** Exercises that exist under more than one of their names. */
+    val duplicates: List<Workouts.Merge> = emptyList(),
 )
 
 /** How far back a screen is looking. */
@@ -169,7 +171,11 @@ class Store(private val db: Db) {
             model = Settings.model(db),
             watchFolders = Settings.watchFolders(db),
             database = Backup.describe(db),
+            duplicates = Workouts.duplicates(db),
         )
+
+    /** Fold duplicate exercises into the ones kept; returns how many went. */
+    fun mergeDuplicates(): Int = Workouts.mergeDuplicates(db).sumOf { it.drop.size }
 
     /** Add a set to today's manually logged workout, creating what is missing. */
     fun addSet(

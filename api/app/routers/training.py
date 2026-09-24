@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from app import workouts
 from app.db import get_session
 from app.models import Exercise, SetEntry, Workout
 from app.schemas import ExerciseIn, ExerciseOut, SetIn, SetOut, WorkoutIn, WorkoutOut
@@ -20,6 +21,18 @@ def list_exercises(search: str | None = None, session: Session = Depends(get_ses
     if search:
         stmt = stmt.where(Exercise.name.ilike(f"%{search}%"))
     return session.scalars(stmt.order_by(Exercise.name)).all()
+
+
+@router.get("/exercises/duplicates")
+def exercise_duplicates(session: Session = Depends(get_session)):
+    """Exercises that exist under more than one of their names, and which is kept."""
+    return [m.as_dict() for m in workouts.duplicates(session)]
+
+
+@router.post("/exercises/duplicates/merge")
+def merge_exercise_duplicates(session: Session = Depends(get_session)):
+    merged = workouts.merge_duplicates(session)
+    return {"merged": sum(len(m.drop) for m in merged), "merges": [m.as_dict() for m in merged]}
 
 
 @router.post("/exercises", response_model=ExerciseOut, status_code=201)

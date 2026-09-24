@@ -75,7 +75,11 @@ working sets toward its target.
 Exercises are matched by alias as well as by name, ignoring case, spaces and
 punctuation. So the plan's "Bench Press" logs to the "Flat Barbell Bench Press"
 an imported FitNotes history already has, and the history carries on. Where
-several names exist, the one with the most sets wins. The templates live in
+several names exist, the imported one wins, then the one with the most sets.
+**Settings → Duplicate exercises** lists any exercise that exists under more
+than one of its names and merges them. The sets move onto the imported one,
+which also picks up the duplicate's muscles and category if it has none. It
+runs in one transaction, so a failure leaves everything as it was. The templates live in
 `api/app/workouts.py` and the aliases in `api/app/seed.py`. Both are generated
 into the Android app, so the two apps offer the same sessions and match names
 the same way.

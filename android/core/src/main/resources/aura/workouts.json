@@ -17,6 +17,15 @@
       ]
     },
     {
+      "name": "Front Squat",
+      "category": "Legs",
+      "modality": "weight_reps",
+      "muscles": [
+        "quads"
+      ],
+      "aliases": []
+    },
+    {
       "name": "Leg Press",
       "category": "Legs",
       "modality": "weight_reps",
@@ -73,6 +82,15 @@
       ]
     },
     {
+      "name": "Leg Extension",
+      "category": "Legs",
+      "modality": "weight_reps",
+      "muscles": [
+        "quads"
+      ],
+      "aliases": []
+    },
+    {
       "name": "Calf Raise",
       "category": "Legs",
       "modality": "weight_reps",
@@ -85,6 +103,44 @@
         "Standing Calf Raise",
         "Seated Calf Raise"
       ]
+    },
+    {
+      "name": "Walking Lunge",
+      "category": "Legs",
+      "modality": "weight_reps",
+      "muscles": [
+        "quads",
+        "glutes"
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Hip Thrust",
+      "category": "Legs",
+      "modality": "weight_reps",
+      "muscles": [
+        "glutes"
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Bodyweight Squat",
+      "category": "Legs",
+      "modality": "bodyweight_reps",
+      "muscles": [
+        "quads",
+        "glutes"
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Glute Bridge",
+      "category": "Legs",
+      "modality": "bodyweight_reps",
+      "muscles": [
+        "glutes"
+      ],
+      "aliases": []
     },
     {
       "name": "Bench Press",
@@ -144,6 +200,16 @@
       ]
     },
     {
+      "name": "Push-Up",
+      "category": "Chest",
+      "modality": "bodyweight_reps",
+      "muscles": [
+        "chest",
+        "triceps"
+      ],
+      "aliases": []
+    },
+    {
       "name": "Dip",
       "category": "Chest",
       "modality": "weighted_bodyweight",
@@ -188,6 +254,16 @@
         "Arnold Dumbbell Press",
         "Arnold Press"
       ]
+    },
+    {
+      "name": "Pike Push-Up",
+      "category": "Shoulders",
+      "modality": "bodyweight_reps",
+      "muscles": [
+        "front_delts",
+        "triceps"
+      ],
+      "aliases": []
     },
     {
       "name": "Lateral Raise",
@@ -300,6 +376,16 @@
       ]
     },
     {
+      "name": "Dumbbell Row",
+      "category": "Back",
+      "modality": "weight_reps",
+      "muscles": [
+        "lats",
+        "upper_back"
+      ],
+      "aliases": []
+    },
+    {
       "name": "Barbell Curl",
       "category": "Arms",
       "modality": "weight_reps",
@@ -405,6 +491,42 @@
         "Dumbbell Preacher Curl",
         "Machine Preacher Curl"
       ]
+    },
+    {
+      "name": "Plank",
+      "category": "Core",
+      "modality": "duration",
+      "muscles": [
+        "abs"
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Hanging Leg Raise",
+      "category": "Core",
+      "modality": "bodyweight_reps",
+      "muscles": [
+        "abs"
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Cable Crunch",
+      "category": "Core",
+      "modality": "weight_reps",
+      "muscles": [
+        "abs"
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Back Extension",
+      "category": "Core",
+      "modality": "bodyweight_reps",
+      "muscles": [
+        "lower_back"
+      ],
+      "aliases": []
     }
   ],
   "templates": [

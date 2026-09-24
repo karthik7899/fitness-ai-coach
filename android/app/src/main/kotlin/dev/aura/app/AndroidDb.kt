@@ -49,6 +49,17 @@ class AndroidDb(private val database: SQLiteDatabase) : Db {
         }
     }
 
+    override fun <T> transaction(block: () -> T): T {
+        database.beginTransaction()
+        try {
+            val result = block()
+            database.setTransactionSuccessful()
+            return result
+        } finally {
+            database.endTransaction()
+        }
+    }
+
     override fun close() = database.close()
 }
 

@@ -1,6 +1,6 @@
 import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
 
-import { api, type BackupInfo, type SettingsPayload } from "../api";
+import { api, type BackupInfo, type Merge, type SettingsPayload } from "../api";
 
 const KEY_URL = "https://aistudio.google.com/apikey";
 
@@ -201,6 +201,72 @@ function Backups() {
   );
 }
 
+/**
+ * Exercises that exist under more than one name, such as a "Bench Press" a
+ * workout created beside an imported "Flat Barbell Bench Press". Each line says
+ * where the sets go before anything moves.
+ */
+function Duplicates() {
+  const [merges, setMerges] = useState<Merge[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ ok: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    api.duplicates().then(setMerges).catch((e) => setNote({ ok: false, message: String(e) }));
+  }, []);
+
+  const sets = (n: number) => `${n} set${n === 1 ? "" : "s"}`;
+  const count = merges?.reduce((total, m) => total + m.drop.length, 0) ?? 0;
+
+  const merge = async () => {
+    setBusy(true);
+    try {
+      const result = await api.mergeDuplicates();
+      setMerges(await api.duplicates());
+      setNote({
+        ok: true,
+        message: `Merged ${result.merged} duplicate exercise${result.merged === 1 ? "" : "s"}.`,
+      });
+    } catch (e) {
+      setNote({ ok: false, message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section>
+      <h2>Duplicate exercises</h2>
+      {merges === null ? (
+        <p className="muted">Checking…</p>
+      ) : merges.length === 0 ? (
+        <p className="muted">None. Every exercise has one name.</p>
+      ) : (
+        <>
+          <p className="muted">
+            These are the same exercise under different names. Merging moves the sets onto the
+            imported one and removes the other. It cannot be undone, so download a backup first
+            if in doubt.
+          </p>
+          <ul>
+            {merges.flatMap((m) =>
+              m.drop.map((d) => (
+                <li key={d.id}>
+                  {d.name} ({sets(d.sets)}) → {m.keep.name} ({sets(m.keep.sets)})
+                </li>
+              )),
+            )}
+          </ul>
+          <button type="button" onClick={merge} disabled={busy}>
+            {busy ? "Merging…" : `Merge ${count} duplicate${count === 1 ? "" : "s"}`}
+          </button>
+        </>
+      )}
+      {note && <p className={note.ok ? "ok" : "error"}>{note.message}</p>}
+    </section>
+  );
+}
+
 export default function Settings() {
   const [current, setCurrent] = useState<SettingsPayload | null>(null);
   const [apiKey, setApiKey] = useState("");
@@ -336,6 +402,8 @@ export default function Settings() {
       </section>
 
       <WatchFolders current={current} onSaved={setCurrent} />
+
+      <Duplicates />
 
       <Backups />
 
