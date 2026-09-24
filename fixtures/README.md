@@ -43,3 +43,10 @@ Gadgetbridge stores epoch seconds, and which day a sample belongs to depends on
 the timezone doing the bucketing — correct behaviour (you want the steps on the
 day you walked them), but it means a fixture would otherwise give different
 answers in different places. Both suites pin UTC for these tests.
+
+## Progression
+
+`progression.json` is different from the rest: it is hand-written, because it
+*is* the specification of the progression rule, case by case. Both
+`api/tests/test_progression.py` and `ProgressionTest.kt` run every case, so a
+change to the rule means changing this file first.

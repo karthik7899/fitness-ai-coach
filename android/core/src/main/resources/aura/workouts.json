@@ -14,7 +14,9 @@
         "Barbell Back Squat",
         "Squat",
         "High Bar Squat"
-      ]
+      ],
+      "increment_kg": 5.0,
+      "rest_s": 180
     },
     {
       "name": "Front Squat",
@@ -23,7 +25,9 @@
       "muscles": [
         "quads"
       ],
-      "aliases": []
+      "aliases": [],
+      "increment_kg": 5.0,
+      "rest_s": 180
     },
     {
       "name": "Leg Press",
@@ -36,7 +40,9 @@
       "aliases": [
         "Leg Press Machine",
         "45 Degree Leg Press"
-      ]
+      ],
+      "increment_kg": 5.0,
+      "rest_s": 180
     },
     {
       "name": "Romanian Deadlift",
@@ -50,7 +56,9 @@
         "Barbell Romanian Deadlift",
         "Stiff-Legged Deadlift",
         "RDL"
-      ]
+      ],
+      "increment_kg": 5.0,
+      "rest_s": 180
     },
     {
       "name": "Deadlift",
@@ -64,7 +72,9 @@
       "aliases": [
         "Barbell Deadlift",
         "Conventional Deadlift"
-      ]
+      ],
+      "increment_kg": 5.0,
+      "rest_s": 180
     },
     {
       "name": "Leg Curl",
@@ -79,7 +89,9 @@
         "Lying Leg Curl",
         "Seated Leg Curl",
         "Hamstring Curl"
-      ]
+      ],
+      "increment_kg": 1.0,
+      "rest_s": 75
     },
     {
       "name": "Leg Extension",
@@ -88,7 +100,9 @@
       "muscles": [
         "quads"
       ],
-      "aliases": []
+      "aliases": [],
+      "increment_kg": 1.0,
+      "rest_s": 75
     },
     {
       "name": "Calf Raise",
@@ -102,7 +116,9 @@
         "Seated Calf Raise Machine",
         "Standing Calf Raise",
         "Seated Calf Raise"
-      ]
+      ],
+      "increment_kg": 1.0,
+      "rest_s": 75
     },
     {
       "name": "Walking Lunge",
@@ -112,7 +128,9 @@
         "quads",
         "glutes"
       ],
-      "aliases": []
+      "aliases": [],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Hip Thrust",
@@ -121,7 +139,9 @@
       "muscles": [
         "glutes"
       ],
-      "aliases": []
+      "aliases": [],
+      "increment_kg": 5.0,
+      "rest_s": 180
     },
     {
       "name": "Bodyweight Squat",
@@ -131,7 +151,9 @@
         "quads",
         "glutes"
       ],
-      "aliases": []
+      "aliases": [],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Glute Bridge",
@@ -140,7 +162,9 @@
       "muscles": [
         "glutes"
       ],
-      "aliases": []
+      "aliases": [],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Bench Press",
@@ -155,7 +179,9 @@
         "Barbell Bench Press",
         "Flat Bench Press",
         "Bench"
-      ]
+      ],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Incline Bench Press",
@@ -168,7 +194,9 @@
       "aliases": [
         "Incline Barbell Bench Press",
         "Incline Bench"
-      ]
+      ],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Dumbbell Press",
@@ -182,7 +210,9 @@
         "Flat Dumbbell Bench Press",
         "Dumbbell Bench Press",
         "Flat Dumbbell Press"
-      ]
+      ],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Chest Fly",
@@ -197,7 +227,9 @@
         "Cable Crossover",
         "Pec Deck",
         "Pec Fly"
-      ]
+      ],
+      "increment_kg": 1.0,
+      "rest_s": 75
     },
     {
       "name": "Push-Up",
@@ -207,7 +239,9 @@
         "chest",
         "triceps"
       ],
-      "aliases": []
+      "aliases": [],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Dip",
@@ -222,7 +256,9 @@
         "Chest Dip",
         "Parallel Bar Dip",
         "Dips"
-      ]
+      ],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Overhead Press",
@@ -238,7 +274,9 @@
         "Military Press",
         "Shoulder Press",
         "OHP"
-      ]
+      ],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Dumbbell Shoulder Press",
@@ -253,7 +291,9 @@
         "Seated Dumbbell Shoulder Press",
         "Arnold Dumbbell Press",
         "Arnold Press"
-      ]
+      ],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Pike Push-Up",
@@ -263,7 +303,9 @@
         "front_delts",
         "triceps"
       ],
-      "aliases": []
+      "aliases": [],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Lateral Raise",
@@ -277,7 +319,9 @@
         "Dumbbell Lateral Raise",
         "Side Raise",
         "Cable Lateral Raise"
-      ]
+      ],
+      "increment_kg": 1.0,
+      "rest_s": 75
     },
     {
       "name": "Rear Delt Fly",
@@ -291,7 +335,9 @@
         "Reverse Dumbbell Fly",
         "Reverse Fly",
         "Reverse Pec Deck"
-      ]
+      ],
+      "increment_kg": 1.0,
+      "rest_s": 75
     },
     {
       "name": "Face Pull",
@@ -304,7 +350,9 @@
       "aliases": [
         "Cable Face Pull",
         "Rope Face Pull"
-      ]
+      ],
+      "increment_kg": 1.0,
+      "rest_s": 75
     },
     {
       "name": "Pull-Up",
@@ -318,7 +366,9 @@
         "Pull Up",
         "Pullup",
         "Wide Grip Pull Up"
-      ]
+      ],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Chin-Up",
@@ -331,7 +381,9 @@
       "aliases": [
         "Chin Up",
         "Chinup"
-      ]
+      ],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Lat Pulldown",
@@ -345,7 +397,9 @@
         "Lat Pull Down",
         "Wide Grip Lat Pulldown",
         "Cable Lat Pulldown"
-      ]
+      ],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Barbell Row",
@@ -359,7 +413,9 @@
         "Bent Over Barbell Row",
         "Bent Over Row",
         "Pendlay Row"
-      ]
+      ],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Seated Cable Row",
@@ -373,7 +429,9 @@
         "Seated Row",
         "Cable Row",
         "Seated Machine Row"
-      ]
+      ],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Dumbbell Row",
@@ -383,7 +441,9 @@
         "lats",
         "upper_back"
       ],
-      "aliases": []
+      "aliases": [],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Barbell Curl",
@@ -396,7 +456,9 @@
         "EZ-Bar Curl",
         "EZ Bar Curl",
         "Standing Barbell Curl"
-      ]
+      ],
+      "increment_kg": 1.0,
+      "rest_s": 75
     },
     {
       "name": "Dumbbell Curl",
@@ -410,7 +472,9 @@
         "Seated Dumbbell Curl",
         "Bicep Curl",
         "Biceps Curl"
-      ]
+      ],
+      "increment_kg": 1.0,
+      "rest_s": 75
     },
     {
       "name": "Hammer Curl",
@@ -423,7 +487,9 @@
       "aliases": [
         "Dumbbell Hammer Curl",
         "Rope Hammer Curl"
-      ]
+      ],
+      "increment_kg": 1.0,
+      "rest_s": 75
     },
     {
       "name": "Triceps Pushdown",
@@ -438,7 +504,9 @@
         "Cable Pushdown",
         "Tricep Pushdown",
         "Triceps Push Down"
-      ]
+      ],
+      "increment_kg": 1.0,
+      "rest_s": 75
     },
     {
       "name": "Skull Crusher",
@@ -451,7 +519,9 @@
         "EZ-Bar Skullcrusher",
         "Lying Triceps Extension",
         "Skullcrusher"
-      ]
+      ],
+      "increment_kg": 1.0,
+      "rest_s": 75
     },
     {
       "name": "Close-Grip Bench Press",
@@ -464,7 +534,9 @@
       "aliases": [
         "Close Grip Barbell Bench Press",
         "Close Grip Bench"
-      ]
+      ],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Overhead Triceps Extension",
@@ -477,7 +549,9 @@
         "Cable Overhead Triceps Extension",
         "Dumbbell Overhead Triceps Extension",
         "Overhead Tricep Extension"
-      ]
+      ],
+      "increment_kg": 1.0,
+      "rest_s": 75
     },
     {
       "name": "Preacher Curl",
@@ -490,7 +564,9 @@
         "EZ-Bar Preacher Curl",
         "Dumbbell Preacher Curl",
         "Machine Preacher Curl"
-      ]
+      ],
+      "increment_kg": 1.0,
+      "rest_s": 75
     },
     {
       "name": "Plank",
@@ -499,7 +575,9 @@
       "muscles": [
         "abs"
       ],
-      "aliases": []
+      "aliases": [],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Hanging Leg Raise",
@@ -508,7 +586,9 @@
       "muscles": [
         "abs"
       ],
-      "aliases": []
+      "aliases": [],
+      "increment_kg": 2.5,
+      "rest_s": 120
     },
     {
       "name": "Cable Crunch",
@@ -517,7 +597,9 @@
       "muscles": [
         "abs"
       ],
-      "aliases": []
+      "aliases": [],
+      "increment_kg": 1.0,
+      "rest_s": 75
     },
     {
       "name": "Back Extension",
@@ -526,7 +608,9 @@
       "muscles": [
         "lower_back"
       ],
-      "aliases": []
+      "aliases": [],
+      "increment_kg": 2.5,
+      "rest_s": 120
     }
   ],
   "templates": [
@@ -538,27 +622,32 @@
         {
           "exercise": "Bench Press",
           "sets": 4,
-          "reps": 8
+          "reps_min": 6,
+          "reps_max": 10
         },
         {
           "exercise": "Incline Bench Press",
           "sets": 3,
-          "reps": 10
+          "reps_min": 8,
+          "reps_max": 12
         },
         {
           "exercise": "Dumbbell Press",
           "sets": 3,
-          "reps": 10
+          "reps_min": 8,
+          "reps_max": 12
         },
         {
           "exercise": "Chest Fly",
           "sets": 3,
-          "reps": 12
+          "reps_min": 10,
+          "reps_max": 15
         },
         {
           "exercise": "Dip",
           "sets": 3,
-          "reps": 10
+          "reps_min": 8,
+          "reps_max": 12
         }
       ]
     },
@@ -570,27 +659,32 @@
         {
           "exercise": "Deadlift",
           "sets": 3,
-          "reps": 5
+          "reps_min": 4,
+          "reps_max": 6
         },
         {
           "exercise": "Pull-Up",
           "sets": 3,
-          "reps": 8
+          "reps_min": 6,
+          "reps_max": 10
         },
         {
           "exercise": "Barbell Row",
           "sets": 3,
-          "reps": 8
+          "reps_min": 6,
+          "reps_max": 10
         },
         {
           "exercise": "Lat Pulldown",
           "sets": 3,
-          "reps": 10
+          "reps_min": 8,
+          "reps_max": 12
         },
         {
           "exercise": "Seated Cable Row",
           "sets": 3,
-          "reps": 12
+          "reps_min": 10,
+          "reps_max": 15
         }
       ]
     },
@@ -602,27 +696,32 @@
         {
           "exercise": "Overhead Press",
           "sets": 4,
-          "reps": 8
+          "reps_min": 6,
+          "reps_max": 10
         },
         {
           "exercise": "Dumbbell Shoulder Press",
           "sets": 3,
-          "reps": 10
+          "reps_min": 8,
+          "reps_max": 12
         },
         {
           "exercise": "Lateral Raise",
           "sets": 3,
-          "reps": 12
+          "reps_min": 12,
+          "reps_max": 15
         },
         {
           "exercise": "Rear Delt Fly",
           "sets": 3,
-          "reps": 15
+          "reps_min": 12,
+          "reps_max": 15
         },
         {
           "exercise": "Face Pull",
           "sets": 3,
-          "reps": 15
+          "reps_min": 12,
+          "reps_max": 15
         }
       ]
     },
@@ -634,27 +733,32 @@
         {
           "exercise": "Back Squat",
           "sets": 4,
-          "reps": 6
+          "reps_min": 5,
+          "reps_max": 8
         },
         {
           "exercise": "Romanian Deadlift",
           "sets": 3,
-          "reps": 8
+          "reps_min": 6,
+          "reps_max": 10
         },
         {
           "exercise": "Leg Press",
           "sets": 3,
-          "reps": 10
+          "reps_min": 8,
+          "reps_max": 12
         },
         {
           "exercise": "Leg Curl",
           "sets": 3,
-          "reps": 12
+          "reps_min": 10,
+          "reps_max": 15
         },
         {
           "exercise": "Calf Raise",
           "sets": 3,
-          "reps": 15
+          "reps_min": 10,
+          "reps_max": 15
         }
       ]
     },
@@ -666,27 +770,32 @@
         {
           "exercise": "Close-Grip Bench Press",
           "sets": 3,
-          "reps": 8
+          "reps_min": 6,
+          "reps_max": 10
         },
         {
           "exercise": "Dip",
           "sets": 3,
-          "reps": 10
+          "reps_min": 8,
+          "reps_max": 12
         },
         {
           "exercise": "Skull Crusher",
           "sets": 3,
-          "reps": 10
+          "reps_min": 8,
+          "reps_max": 12
         },
         {
           "exercise": "Triceps Pushdown",
           "sets": 3,
-          "reps": 12
+          "reps_min": 10,
+          "reps_max": 15
         },
         {
           "exercise": "Overhead Triceps Extension",
           "sets": 3,
-          "reps": 12
+          "reps_min": 10,
+          "reps_max": 15
         }
       ]
     },
@@ -698,27 +807,32 @@
         {
           "exercise": "Chin-Up",
           "sets": 3,
-          "reps": 8
+          "reps_min": 6,
+          "reps_max": 10
         },
         {
           "exercise": "Barbell Curl",
           "sets": 3,
-          "reps": 10
+          "reps_min": 8,
+          "reps_max": 12
         },
         {
           "exercise": "Dumbbell Curl",
           "sets": 3,
-          "reps": 12
+          "reps_min": 10,
+          "reps_max": 15
         },
         {
           "exercise": "Hammer Curl",
           "sets": 3,
-          "reps": 12
+          "reps_min": 10,
+          "reps_max": 15
         },
         {
           "exercise": "Preacher Curl",
           "sets": 3,
-          "reps": 12
+          "reps_min": 10,
+          "reps_max": 15
         }
       ]
     }

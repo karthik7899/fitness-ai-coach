@@ -66,7 +66,7 @@ export default function Dashboard({ onStart }: { onStart: () => void }) {
                   </button>
                 </div>
                 <div className="muted small">
-                  {t.exercises.map((e) => `${e.exercise} ${e.sets}×${e.reps}`).join(" · ")}
+                  {t.exercises.map((e) => `${e.exercise} ${e.sets}×${e.reps_min}–${e.reps_max}`).join(" · ")}
                 </div>
               </div>
             ))}

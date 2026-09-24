@@ -102,7 +102,7 @@ export interface Template {
   id: string;
   name: string;
   about: string;
-  exercises: { exercise: string; sets: number; reps: number }[];
+  exercises: { exercise: string; sets: number; reps_min: number; reps_max: number }[];
 }
 
 export interface PlanEntry {
@@ -111,9 +111,15 @@ export interface PlanEntry {
   planned: string;
   exercise_id: number | null;
   sets: number;
-  reps: number;
+  reps_min: number;
+  reps_max: number;
   done: number;
   last_weight_kg: number | null;
+  /** Today's target, from the last session before today. */
+  advice: "new" | "up" | "repeat" | "down";
+  target_weight_kg: number | null;
+  target_reps: number;
+  rest_s: number;
 }
 
 /** Today's starter workout, with progress through it. */

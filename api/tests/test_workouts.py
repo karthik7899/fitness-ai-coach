@@ -42,9 +42,9 @@ def test_there_is_one_workout_per_body_part():
 def test_every_template_exercise_is_in_the_catalogue():
     known = {name for name, *_ in CATALOGUE}
     for template in workouts.TEMPLATES:
-        for name, sets, reps in template["exercises"]:
+        for name, sets, reps_min, reps_max in template["exercises"]:
             assert name in known, f"{template['id']}: {name} is not in the catalogue"
-            assert sets > 0 and reps > 0
+            assert sets > 0 and 0 < reps_min < reps_max
 
 
 def test_no_alias_belongs_to_two_exercises():
@@ -171,6 +171,31 @@ def test_last_weight_is_the_most_recent_working_set(started, exercises):
     plan = workouts.plan(started, TODAY)
     assert entry(plan, "Back Squat")["last_weight_kg"] == 97.5
     assert entry(plan, "Leg Press")["last_weight_kg"] is None
+
+
+def test_the_target_comes_from_the_last_session(started, exercises):
+    squat = exercises["squat"]
+    # Legs plans Back Squat 4 × 5–8. Last time: all four sets of 8 at 100.
+    add_workout(started, TODAY - dt.timedelta(days=4), [(squat, 100, 8, False)] * 4)
+
+    squat_row = entry(workouts.plan(started, TODAY), "Back Squat")
+    assert (squat_row["advice"], squat_row["target_weight_kg"], squat_row["target_reps"]) == (
+        "up", 105.0, 5,
+    )
+    assert squat_row["rest_s"] == 180
+    assert (squat_row["reps_min"], squat_row["reps_max"]) == (5, 8)
+
+
+def test_todays_sets_do_not_move_the_target(started, exercises):
+    squat = exercises["squat"]
+    add_workout(started, TODAY - dt.timedelta(days=4), [(squat, 100, 8, False)] * 4)
+    add_workout(started, TODAY, [(squat, 105, 5, False)])
+    assert entry(workouts.plan(started, TODAY), "Back Squat")["target_weight_kg"] == 105.0
+
+
+def test_with_no_history_the_target_is_the_bottom_of_the_range(started):
+    row = entry(workouts.plan(started, TODAY), "Leg Press")
+    assert (row["advice"], row["target_weight_kg"], row["target_reps"]) == ("new", None, 8)
 
 
 def test_a_plan_lasts_only_the_day_it_was_started(started):

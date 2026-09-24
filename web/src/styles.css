@@ -329,6 +329,41 @@ button.link {
   color: var(--status-good);
 }
 
+.plan-row .target {
+  display: block;
+  color: var(--text);
+  margin-top: 2px;
+}
+
+.plan-row .target.up {
+  color: var(--status-good);
+}
+
+.rest {
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.rest strong {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rest-bar {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.rest-bar > div {
+  height: 100%;
+  background: var(--accent);
+}
+
 /* ---------- charts ---------- */
 
 .chart {

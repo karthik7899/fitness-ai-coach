@@ -137,9 +137,42 @@ class AuraState(
 
     // ----------------------------------------------------------------------
 
-    fun addSet(exercise: String, weightKg: Double?, reps: Int?, isWarmup: Boolean) = load {
-        onIo { store.addSet(exercise, weightKg, reps, isWarmup) }
+    fun addSet(
+        exercise: String,
+        weightKg: Double?,
+        reps: Int?,
+        isWarmup: Boolean,
+        rpe: Double? = null,
+        restSeconds: Int? = null,
+    ) = load {
+        onIo { store.addSet(exercise, weightKg, reps, isWarmup, rpe = rpe) }
         log = onIo { store.log() }
+        restSeconds?.let(::startRest)
+    }
+
+    // ----------------------------------------------------------------------
+    // Rest timer. Held as the moment rest ends on the monotonic clock, so it
+    // survives recomposition and is not thrown by a change of wall-clock time.
+    // ----------------------------------------------------------------------
+
+    var restEndsAt by mutableStateOf<Long?>(null)
+        private set
+    var restTotalMs by mutableStateOf(0L)
+        private set
+
+    fun startRest(seconds: Int) {
+        restTotalMs = seconds * 1000L
+        restEndsAt = android.os.SystemClock.elapsedRealtime() + restTotalMs
+    }
+
+    fun extendRest(seconds: Int) {
+        val ends = restEndsAt ?: return
+        restEndsAt = ends + seconds * 1000L
+        restTotalMs += seconds * 1000L
+    }
+
+    fun endRest() {
+        restEndsAt = null
     }
 
     /** Make a starter workout today's plan and go to where it is logged. */

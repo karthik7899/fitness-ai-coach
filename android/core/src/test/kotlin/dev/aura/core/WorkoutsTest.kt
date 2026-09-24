@@ -37,7 +37,7 @@ class WorkoutsTest {
             listOf("Chest", "Back", "Shoulders", "Legs", "Triceps", "Biceps"),
             Workouts.templates.map { it.name },
         )
-        assertTrue(Workouts.templates.all { t -> t.exercises.all { it.sets > 0 && it.reps > 0 } })
+        assertTrue(Workouts.templates.all { t -> t.exercises.all { it.sets > 0 && it.repsMin in 1 until it.repsMax } })
     }
 
     @Test
@@ -262,6 +262,36 @@ class WorkoutsTest {
         val plan = assertNotNull(Workouts.plan(db, day))
         assertEquals(97.5, plan.entry("Back Squat").lastWeightKg)
         assertNull(plan.entry("Leg Press").lastWeightKg)
+    }
+
+    @Test
+    fun `the target comes from the last session, and today's sets do not move it`() = withDb { db ->
+        Workouts.start(db, "legs", day)
+        // Legs plans Back Squat 4 × 5–8. Last time: all four sets of 8 at 100.
+        db.addWorkout(day.minusDays(4), List(4) { SetSpec("Back Squat", 100.0, 8) })
+
+        val squat = assertNotNull(Workouts.plan(db, day)).entry("Back Squat")
+        assertEquals(Suggestion(Advice.UP, 105.0, 5), squat.target)
+        assertEquals(180, squat.restS)
+        assertEquals(5 to 8, squat.repsMin to squat.repsMax)
+
+        db.addWorkout(day, listOf(SetSpec("Back Squat", 105.0, 5)))
+        assertEquals(105.0, assertNotNull(Workouts.plan(db, day)).entry("Back Squat").target.weightKg)
+        assertEquals(
+            Suggestion(Advice.NEW, null, 8),
+            assertNotNull(Workouts.plan(db, day)).entry("Leg Press").target,
+        )
+    }
+
+    @Test
+    fun `effort is recorded with the set and read by the rule`() = withDb { db ->
+        val store = Store(db)
+        store.startWorkout("legs", day)
+        repeat(4) { store.addSet("Back Squat", 100.0, 8, day = day.minusDays(4), rpe = if (it == 3) 10.0 else 8.0) }
+
+        assertEquals(10.0, store.log(day.minusDays(4)).sets.last().rpe)
+        // The last set was a grind, so the weight holds.
+        assertEquals(Advice.REPEAT, assertNotNull(store.log(day).plan).entry("Back Squat").target.advice)
     }
 
     @Test

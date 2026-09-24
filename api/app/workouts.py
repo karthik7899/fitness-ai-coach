@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from sqlalchemy import and_, case, func, select, text
 from sqlalchemy.orm import Session
 
-from app import settings_store
+from app import progression, settings_store
 from app.models import Exercise, SetEntry, Workout
 from app.seed import ALIASES, CATALOGUE
 
@@ -31,18 +31,19 @@ from app.seed import ALIASES, CATALOGUE
 # same one, so a restored backup carries it across.
 ACTIVE = "workout"
 
-# One session per body part. id, name, what it is for, [(exercise, sets, reps)]
+# One session per body part.
+# id, name, what it is for, [(exercise, sets, reps_min, reps_max)]
 TEMPLATES: list[dict] = [
     {
         "id": "chest",
         "name": "Chest",
         "about": "Flat and incline pressing, then fly and dips.",
         "exercises": [
-            ("Bench Press", 4, 8),
-            ("Incline Bench Press", 3, 10),
-            ("Dumbbell Press", 3, 10),
-            ("Chest Fly", 3, 12),
-            ("Dip", 3, 10),
+            ("Bench Press", 4, 6, 10),
+            ("Incline Bench Press", 3, 8, 12),
+            ("Dumbbell Press", 3, 8, 12),
+            ("Chest Fly", 3, 10, 15),
+            ("Dip", 3, 8, 12),
         ],
     },
     {
@@ -50,11 +51,11 @@ TEMPLATES: list[dict] = [
         "name": "Back",
         "about": "A hinge, a vertical pull and two rows.",
         "exercises": [
-            ("Deadlift", 3, 5),
-            ("Pull-Up", 3, 8),
-            ("Barbell Row", 3, 8),
-            ("Lat Pulldown", 3, 10),
-            ("Seated Cable Row", 3, 12),
+            ("Deadlift", 3, 4, 6),
+            ("Pull-Up", 3, 6, 10),
+            ("Barbell Row", 3, 6, 10),
+            ("Lat Pulldown", 3, 8, 12),
+            ("Seated Cable Row", 3, 10, 15),
         ],
     },
     {
@@ -62,11 +63,11 @@ TEMPLATES: list[dict] = [
         "name": "Shoulders",
         "about": "Pressing, then front, side and rear delts.",
         "exercises": [
-            ("Overhead Press", 4, 8),
-            ("Dumbbell Shoulder Press", 3, 10),
-            ("Lateral Raise", 3, 12),
-            ("Rear Delt Fly", 3, 15),
-            ("Face Pull", 3, 15),
+            ("Overhead Press", 4, 6, 10),
+            ("Dumbbell Shoulder Press", 3, 8, 12),
+            ("Lateral Raise", 3, 12, 15),
+            ("Rear Delt Fly", 3, 12, 15),
+            ("Face Pull", 3, 12, 15),
         ],
     },
     {
@@ -74,11 +75,11 @@ TEMPLATES: list[dict] = [
         "name": "Legs",
         "about": "Quads, hamstrings, glutes and calves.",
         "exercises": [
-            ("Back Squat", 4, 6),
-            ("Romanian Deadlift", 3, 8),
-            ("Leg Press", 3, 10),
-            ("Leg Curl", 3, 12),
-            ("Calf Raise", 3, 15),
+            ("Back Squat", 4, 5, 8),
+            ("Romanian Deadlift", 3, 6, 10),
+            ("Leg Press", 3, 8, 12),
+            ("Leg Curl", 3, 10, 15),
+            ("Calf Raise", 3, 10, 15),
         ],
     },
     {
@@ -86,11 +87,11 @@ TEMPLATES: list[dict] = [
         "name": "Triceps",
         "about": "A heavy compound, then all three heads.",
         "exercises": [
-            ("Close-Grip Bench Press", 3, 8),
-            ("Dip", 3, 10),
-            ("Skull Crusher", 3, 10),
-            ("Triceps Pushdown", 3, 12),
-            ("Overhead Triceps Extension", 3, 12),
+            ("Close-Grip Bench Press", 3, 6, 10),
+            ("Dip", 3, 8, 12),
+            ("Skull Crusher", 3, 8, 12),
+            ("Triceps Pushdown", 3, 10, 15),
+            ("Overhead Triceps Extension", 3, 10, 15),
         ],
     },
     {
@@ -98,17 +99,37 @@ TEMPLATES: list[dict] = [
         "name": "Biceps",
         "about": "Chin-ups, then curls in three grips.",
         "exercises": [
-            ("Chin-Up", 3, 8),
-            ("Barbell Curl", 3, 10),
-            ("Dumbbell Curl", 3, 12),
-            ("Hammer Curl", 3, 12),
-            ("Preacher Curl", 3, 12),
+            ("Chin-Up", 3, 6, 10),
+            ("Barbell Curl", 3, 8, 12),
+            ("Dumbbell Curl", 3, 10, 15),
+            ("Hammer Curl", 3, 10, 15),
+            ("Preacher Curl", 3, 10, 15),
         ],
     },
 ]
 
 _CATALOGUE = {name.lower(): (name, category, modality, muscles)
               for name, category, modality, muscles in CATALOGUE}
+
+# How much to add when a range is beaten, and how long to rest between sets.
+# Big lower-body lifts move in bigger steps and need longer; small muscles
+# move in small steps and recover quicker. Everything else sits between.
+HEAVY = {"Back Squat", "Front Squat", "Deadlift", "Romanian Deadlift", "Leg Press", "Hip Thrust"}
+ISOLATION = {
+    "Leg Curl", "Leg Extension", "Calf Raise", "Chest Fly", "Lateral Raise", "Rear Delt Fly",
+    "Face Pull", "Barbell Curl", "Dumbbell Curl", "Hammer Curl", "Preacher Curl",
+    "Triceps Pushdown", "Skull Crusher", "Overhead Triceps Extension", "Cable Crunch",
+}
+
+
+def loading(name: str) -> tuple[float, int]:
+    """(weight step in kg, rest between sets in seconds) for a catalogue exercise."""
+    if name in HEAVY:
+        return 5.0, 180
+    if name in ISOLATION:
+        return 1.0, 75
+    return 2.5, 120
+
 
 _NOT_ALPHANUMERIC = re.compile(r"[^a-z0-9]+")
 
@@ -140,6 +161,8 @@ def document() -> dict:
                 "modality": modality,
                 "muscles": muscles,
                 "aliases": ALIASES.get(name, []),
+                "increment_kg": loading(name)[0],
+                "rest_s": loading(name)[1],
             }
             for name, category, modality, muscles in CATALOGUE
         ],
@@ -149,8 +172,8 @@ def document() -> dict:
                 "name": t["name"],
                 "about": t["about"],
                 "exercises": [
-                    {"exercise": name, "sets": sets, "reps": reps}
-                    for name, sets, reps in t["exercises"]
+                    {"exercise": name, "sets": sets, "reps_min": lo, "reps_max": hi}
+                    for name, sets, lo, hi in t["exercises"]
                 ],
             }
             for t in TEMPLATES
@@ -324,15 +347,51 @@ def finish(session: Session) -> None:
     settings_store.delete(session, ACTIVE)
 
 
+def _previous_session(
+    session: Session, exercise_id: int, day: dt.date
+) -> list[tuple[float | None, int | None, float | None]]:
+    """(weight, reps, rpe) of each working set on the last day before `day`."""
+    last_day = session.scalar(
+        select(func.max(Workout.performed_on))
+        .join(SetEntry, SetEntry.workout_id == Workout.id)
+        .where(
+            SetEntry.exercise_id == exercise_id,
+            SetEntry.is_warmup.is_(False),
+            Workout.performed_on < day,
+        )
+    )
+    if last_day is None:
+        return []
+    rows = session.execute(
+        select(SetEntry.weight_kg, SetEntry.reps, SetEntry.rpe)
+        .join(Workout, Workout.id == SetEntry.workout_id)
+        .where(
+            SetEntry.exercise_id == exercise_id,
+            SetEntry.is_warmup.is_(False),
+            Workout.performed_on == last_day,
+        )
+        .order_by(Workout.id, SetEntry.position, SetEntry.id)
+    ).all()
+    return [
+        (
+            float(w) if w is not None else None,
+            r,
+            float(rpe) if rpe is not None else None,
+        )
+        for w, r, rpe in rows
+    ]
+
+
 def plan(session: Session, day: dt.date) -> dict | None:
-    """Today's plan, if one was started today, with progress through it.
+    """Today's plan, if one was started today, with progress and targets.
 
     Each entry names the exercise as it exists in the database, which may be
     an alias of the template's name; `planned` keeps the template's. `done`
     counts working sets of it logged on the day, from any workout — logging
-    it by hand or through the coach counts too. `last_weight_kg` is the most
-    recent working weight, including today's, so the next set starts where
-    the last one left off.
+    it by hand or through the coach counts too. The target comes from
+    `progression.suggest` over the last session before today, so it holds
+    steady through today's sets. `last_weight_kg` is the most recent working
+    weight, today's included.
     """
     active = settings_store.get(session, ACTIVE) or {}
     if active.get("day") != day.isoformat():
@@ -344,7 +403,8 @@ def plan(session: Session, day: dt.date) -> dict | None:
     entries = []
     for entry in chosen["exercises"]:
         exercise = resolve(session, entry["exercise"])
-        done, last = 0, None
+        increment, rest = loading(entry["exercise"])
+        done, last, previous = 0, None, []
         if exercise is not None:
             done = session.scalar(
                 select(func.count())
@@ -367,15 +427,24 @@ def plan(session: Session, day: dt.date) -> dict | None:
                 .order_by(Workout.performed_on.desc(), SetEntry.id.desc())
                 .limit(1)
             )
+            previous = _previous_session(session, exercise.id, day)
+        target = progression.suggest(
+            previous, entry["sets"], entry["reps_min"], entry["reps_max"], increment
+        )
         entries.append(
             {
                 "exercise": exercise.name if exercise is not None else entry["exercise"],
                 "planned": entry["exercise"],
                 "exercise_id": exercise.id if exercise is not None else None,
                 "sets": entry["sets"],
-                "reps": entry["reps"],
+                "reps_min": entry["reps_min"],
+                "reps_max": entry["reps_max"],
                 "done": done,
                 "last_weight_kg": float(last) if last is not None else None,
+                "advice": target.advice,
+                "target_weight_kg": target.weight,
+                "target_reps": target.reps,
+                "rest_s": rest,
             }
         )
     return {"template": chosen, "day": day.isoformat(), "entries": entries}

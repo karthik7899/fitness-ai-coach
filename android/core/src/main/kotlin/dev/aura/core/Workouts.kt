@@ -9,7 +9,12 @@ import kotlinx.serialization.json.put
 
 /** One exercise in a template, with its target. */
 @Serializable
-data class Planned(val exercise: String, val sets: Int, val reps: Int)
+data class Planned(
+    val exercise: String,
+    val sets: Int,
+    @kotlinx.serialization.SerialName("reps_min") val repsMin: Int,
+    @kotlinx.serialization.SerialName("reps_max") val repsMax: Int,
+)
 
 /** A starter workout: a named list of exercises with targets. */
 @Serializable
@@ -27,6 +32,8 @@ data class CatalogueEntry(
     val modality: String,
     val muscles: List<String>,
     val aliases: List<String> = emptyList(),
+    @kotlinx.serialization.SerialName("increment_kg") val incrementKg: Double = 2.5,
+    @kotlinx.serialization.SerialName("rest_s") val restS: Int = 120,
 )
 
 /** Where one exercise of today's plan stands. */
@@ -36,11 +43,16 @@ data class PlanEntry(
     /** The template's name for it. */
     val planned: String,
     val sets: Int,
-    val reps: Int,
+    val repsMin: Int,
+    val repsMax: Int,
     /** Working sets of it logged today, from any source. */
     val done: Int,
     /** The most recent working weight, today's included. */
     val lastWeightKg: Double?,
+    /** What to aim for today, from the last session before it. */
+    val target: Suggestion,
+    /** Rest between its sets, in seconds. */
+    val restS: Int,
 ) {
     val complete: Boolean
         get() = done >= sets
@@ -245,16 +257,53 @@ object Workouts {
             chosen.exercises.map { planned ->
                 val found = resolve(db, planned.exercise)
                 val id = found?.first
+                val loading = document.catalogue.firstOrNull { it.name == planned.exercise }
+                val increment = loading?.incrementKg ?: 2.5
                 PlanEntry(
                     exercise = found?.second ?: planned.exercise,
                     planned = planned.exercise,
                     sets = planned.sets,
-                    reps = planned.reps,
+                    repsMin = planned.repsMin,
+                    repsMax = planned.repsMax,
                     done = id?.let { doneOn(db, it, day) } ?: 0,
                     lastWeightKg = id?.let { lastWeight(db, it) },
+                    // From the last session before today, so it holds steady
+                    // through today's sets. As workouts.plan.
+                    target =
+                        Progression.suggest(
+                            id?.let { previousSession(db, it, day) }.orEmpty(),
+                            planned.sets,
+                            planned.repsMin,
+                            planned.repsMax,
+                            increment,
+                        ),
+                    restS = loading?.restS ?: 120,
                 )
             }
         return Plan(chosen, day, entries)
+    }
+
+    /** Each working set on the last day before [day], in the order done. */
+    private fun previousSession(db: Db, exerciseId: Int, day: LocalDate): List<DoneSet> {
+        val id = exerciseId.toString()
+        val lastDay =
+            db.selectOne(
+                """
+                SELECT MAX(w.performed_on) AS d
+                FROM sets s JOIN workouts w ON w.id = s.workout_id
+                WHERE s.exercise_id = CAST(? AS INTEGER) AND s.is_warmup = 0 AND w.performed_on < ?
+                """,
+                listOf(id, day.toString()),
+            ) { it.stringOrNull("d") } ?: return emptyList()
+        return db.select(
+            """
+            SELECT s.weight_kg, s.reps, s.rpe
+            FROM sets s JOIN workouts w ON w.id = s.workout_id
+            WHERE s.exercise_id = CAST(? AS INTEGER) AND s.is_warmup = 0 AND w.performed_on = ?
+            ORDER BY w.id, s.position, s.id
+            """,
+            listOf(id, lastDay),
+        ) { DoneSet(it.doubleOrNull("weight_kg"), it.longOrNull("reps")?.toInt(), it.doubleOrNull("rpe")) }
     }
 
     private fun exerciseId(db: Db, name: String): Int? =

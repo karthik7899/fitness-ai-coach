@@ -1,0 +1,77 @@
+{
+  "_comment": "The progression rule, as cases both apps must agree on: api/tests/test_progression.py and android ProgressionTest.kt. Hand-written: this file is the specification. `last` is the working sets of the most recent earlier session, in order.",
+  "cases": [
+    {
+      "name": "no history: start at the bottom of the range, weight left to the trainee",
+      "last": [],
+      "sets": 3, "reps_min": 8, "reps_max": 12, "increment": 2.5,
+      "expect": {"advice": "new", "weight": null, "reps": 8}
+    },
+    {
+      "name": "every set at the top of the range: add a step, back to the bottom",
+      "last": [[80, 12, null], [80, 12, null], [80, 12, null]],
+      "sets": 3, "reps_min": 8, "reps_max": 12, "increment": 2.5,
+      "expect": {"advice": "up", "weight": 82.5, "reps": 8}
+    },
+    {
+      "name": "more reps than the range counts as reaching it",
+      "last": [[100, 7, 8], [100, 6, 8.5], [100, 6, 9]],
+      "sets": 3, "reps_min": 4, "reps_max": 6, "increment": 5,
+      "expect": {"advice": "up", "weight": 105, "reps": 4}
+    },
+    {
+      "name": "one set short of the top: same weight, one more rep on the weakest",
+      "last": [[80, 12, null], [80, 11, null], [80, 10, null]],
+      "sets": 3, "reps_min": 8, "reps_max": 12, "increment": 2.5,
+      "expect": {"advice": "repeat", "weight": 80, "reps": 11}
+    },
+    {
+      "name": "all at the top but a set was a grind (RPE 10): hold the weight",
+      "last": [[80, 12, 8], [80, 12, 9], [80, 12, 10]],
+      "sets": 3, "reps_min": 8, "reps_max": 12, "increment": 2.5,
+      "expect": {"advice": "repeat", "weight": 80, "reps": 12}
+    },
+    {
+      "name": "too few sets at that weight to count as done",
+      "last": [[80, 12, null], [80, 12, null]],
+      "sets": 3, "reps_min": 8, "reps_max": 12, "increment": 2.5,
+      "expect": {"advice": "repeat", "weight": 80, "reps": 12}
+    },
+    {
+      "name": "only the top weight counts: lighter back-off sets are ignored",
+      "last": [[90, 12, null], [90, 12, null], [90, 12, null], [70, 15, null]],
+      "sets": 3, "reps_min": 8, "reps_max": 12, "increment": 2.5,
+      "expect": {"advice": "up", "weight": 92.5, "reps": 8}
+    },
+    {
+      "name": "even the best set short of the bottom: drop about ten percent",
+      "last": [[100, 6, 10], [100, 5, 10], [100, 4, 10]],
+      "sets": 3, "reps_min": 8, "reps_max": 12, "increment": 2.5,
+      "expect": {"advice": "down", "weight": 90, "reps": 8}
+    },
+    {
+      "name": "the drop rounds down to a loadable weight",
+      "last": [[72.5, 5, null]],
+      "sets": 3, "reps_min": 8, "reps_max": 12, "increment": 2.5,
+      "expect": {"advice": "down", "weight": 65, "reps": 8}
+    },
+    {
+      "name": "bodyweight: progress in reps, and say when to add load",
+      "last": [[null, 10, null], [null, 10, null], [null, 10, null]],
+      "sets": 3, "reps_min": 6, "reps_max": 10, "increment": 2.5,
+      "expect": {"advice": "up", "weight": null, "reps": 10}
+    },
+    {
+      "name": "bodyweight short of the top: one more rep",
+      "last": [[null, 8, null], [null, 7, null], [null, 6, null]],
+      "sets": 3, "reps_min": 6, "reps_max": 10, "increment": 2.5,
+      "expect": {"advice": "repeat", "weight": null, "reps": 7}
+    },
+    {
+      "name": "small increments for small muscles",
+      "last": [[10, 15, null], [10, 15, null], [10, 15, null]],
+      "sets": 3, "reps_min": 12, "reps_max": 15, "increment": 1,
+      "expect": {"advice": "up", "weight": 11, "reps": 12}
+    }
+  ]
+}

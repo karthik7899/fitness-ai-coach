@@ -65,6 +65,24 @@ The tool specs in `agent/tools.py` are plain JSON Schema and carry no provider
 types; only `agent/coach.py` knows about Gemini, so swapping providers is one
 file.
 
+**Progression.** Each workout exercise has a rep range, such as Bench Press
+4 × 6–10. The checklist shows today's target, worked out from your last
+session before today by a fixed rule, not the AI coach:
+
+- **Up:** every planned set reached the top of the range, and none was RPE 10.
+  Add one step (5 kg for big lower-body lifts, 1 kg for small muscles,
+  otherwise 2.5 kg) and start again at the bottom of the range.
+- **Down:** even the best set fell short of the bottom. Go about 10% lighter.
+- **Repeat:** anything in between. Keep the weight and aim for one more rep on
+  the weakest set.
+
+RPE is optional on every set, but it is what separates a grind from an easy
+set with the same numbers. The rule lives in `api/app/progression.py` and
+`android/core/.../Progression.kt`, and both must pass the cases in
+`fixtures/progression.json`. After each set a rest timer starts: 3 minutes for
+big lifts, 2 for other compounds, 75 seconds for isolation, and 1 for warmups.
+It buzzes and beeps at zero while the app is open.
+
 **Starter workouts.** The Dashboard offers one plain session per body part:
 Chest, Back, Shoulders, Legs, Triceps and Biceps. Starting one creates any of
 its exercises that are missing, with their muscles, and makes it today's plan.

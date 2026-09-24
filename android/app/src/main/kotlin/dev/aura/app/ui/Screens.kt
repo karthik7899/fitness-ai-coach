@@ -2,7 +2,10 @@ package dev.aura.app.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +21,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,6 +29,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -33,6 +39,7 @@ import dev.aura.app.AuraState
 import dev.aura.app.BuildConfig
 import dev.aura.app.Tab
 import dev.aura.app.ChatTurn
+import dev.aura.core.Advice
 import dev.aura.core.Plan
 import dev.aura.core.PlanEntry
 import dev.aura.core.Template
@@ -169,7 +176,7 @@ private fun TemplateCard(
             }
         }
         Text(
-            template.exercises.joinToString(" · ") { "${it.exercise} ${it.sets}×${it.reps}" },
+            template.exercises.joinToString(" · ") { "${it.exercise} ${it.sets}×${it.repsMin}–${it.repsMax}" },
             color = AuraColors.Muted,
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(top = 6.dp),
@@ -261,20 +268,25 @@ fun LogScreen(state: LogState?, app: AuraState) {
     var weight by remember { mutableStateOf("") }
     var reps by remember { mutableStateOf("") }
     var warmup by remember { mutableStateOf(false) }
+    var rpe by remember { mutableStateOf<String?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        RestTimer(app)
+
         state.plan?.let { plan ->
             PlanSection(
                 plan = plan,
                 selected = exercise,
                 onChoose = { entry ->
                     exercise = entry.exercise
-                    reps = entry.reps.toString()
-                    // Plain digits: this is parsed back, so no grouping or locale.
-                    weight = entry.lastWeightKg
+                    reps = entry.target.reps.toString()
+                    // Today's target, else what was lifted last; plain digits,
+                    // since this is parsed back, so no grouping or locale.
+                    weight = (entry.target.weightKg ?: entry.lastWeightKg)
                         ?.let { java.math.BigDecimal.valueOf(it).stripTrailingZeros().toPlainString() }
                         .orEmpty()
                     warmup = false
+                    rpe = null
                 },
                 onFinish = app::finishWorkout,
             )
@@ -323,13 +335,38 @@ fun LogScreen(state: LogState?, app: AuraState) {
             )
         }
 
+        // How hard the set was: RPE 10 is nothing left, 8 is two reps in reserve.
+        // Optional, but it is what tells the progression rule a grind from an
+        // easy set at the same numbers.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Muted("RPE", modifier = Modifier.padding(end = 4.dp))
+            ChipRow(
+                options = listOf("6", "7", "8", "9", "10"),
+                selected = rpe.orEmpty(),
+                onSelect = { rpe = if (rpe == it) null else it },
+            )
+        }
+
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Button(
                 onClick = {
-                    app.addSet(exercise, weight.toDoubleOrNull(), reps.toIntOrNull(), warmup)
+                    val rest =
+                        if (warmup) 60
+                        else state.plan?.entries
+                            ?.firstOrNull { it.exercise.equals(exercise.trim(), true) }
+                            ?.restS ?: 120
+                    app.addSet(
+                        exercise,
+                        weight.toDoubleOrNull(),
+                        reps.toIntOrNull(),
+                        warmup,
+                        rpe = rpe?.toDoubleOrNull(),
+                        restSeconds = rest,
+                    )
+                    rpe = null
                     // Following a plan, the next set is usually the same again.
                     val planned = state.plan?.entries?.any { it.exercise.equals(exercise.trim(), true) }
                     if (planned != true) {
@@ -366,6 +403,7 @@ fun LogScreen(state: LogState?, app: AuraState) {
                                 buildString {
                                     append(entry.weightKg?.let { Format.kg(it) } ?: "bodyweight")
                                     entry.reps?.let { append(" × $it") }
+                                    entry.rpe?.let { append("  ·  RPE ${Format.number(it, 1)}") }
                                     if (entry.isWarmup) append("  ·  warmup")
                                 },
                                 color = AuraColors.Muted,
@@ -417,7 +455,7 @@ private fun PlanSection(
                     )
                     Text(
                         buildString {
-                            append("${entry.sets} × ${entry.reps}")
+                            append("${entry.sets} × ${entry.repsMin}–${entry.repsMax}")
                             // Your own name for it, from an import, may differ from the plan's.
                             if (!entry.exercise.equals(entry.planned, ignoreCase = true)) {
                                 append("  ·  for ${entry.planned}")
@@ -425,6 +463,11 @@ private fun PlanSection(
                             entry.lastWeightKg?.let { append("  ·  last ${Format.kg(it)}") }
                         },
                         color = AuraColors.Muted,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                    Text(
+                        targetLine(entry),
+                        color = if (entry.target.advice == Advice.UP) AuraColors.StatusGood else AuraColors.Text,
                         style = MaterialTheme.typography.labelMedium,
                     )
                 }
@@ -435,6 +478,76 @@ private fun PlanSection(
                     style = MaterialTheme.typography.labelLarge,
                 )
             }
+        }
+    }
+}
+
+/** Today's target in words, with which way it moved and why. */
+private fun targetLine(entry: PlanEntry): String {
+    val t = entry.target
+    val load = t.weightKg?.let { "${Format.kg(it)} × ${t.reps}" } ?: "${t.reps} reps"
+    return when (t.advice) {
+        Advice.NEW -> "Today: ${t.reps} reps, a weight you could lift ${entry.repsMax} times"
+        Advice.UP ->
+            if (t.weightKg == null) "Today: top of the range last time, add load"
+            else "Today: $load  ↑ up from last time"
+        Advice.REPEAT -> "Today: $load  ·  beat last time"
+        Advice.DOWN -> "Today: $load  ↓ lighter, to get back in the range"
+    }
+}
+
+/**
+ * Counts down the rest after a set, then buzzes and beeps. In the app only:
+ * with the screen off it waits, and the elapsed time still counts.
+ */
+@Composable
+private fun RestTimer(app: AuraState) {
+    val endsAt = app.restEndsAt ?: return
+    var now by remember { mutableStateOf(android.os.SystemClock.elapsedRealtime()) }
+    val haptics = LocalHapticFeedback.current
+
+    LaunchedEffect(endsAt) {
+        while (true) {
+            now = android.os.SystemClock.elapsedRealtime()
+            if (now >= endsAt) {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                runCatching {
+                    val tone = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 80)
+                    tone.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 400)
+                    kotlinx.coroutines.delay(500)
+                    tone.release()
+                }
+                app.endRest()
+                break
+            }
+            kotlinx.coroutines.delay(250)
+        }
+    }
+
+    val remaining = ((endsAt - now).coerceAtLeast(0) + 999) / 1000
+    val fraction =
+        if (app.restTotalMs <= 0) 0f
+        else ((endsAt - now).coerceAtLeast(0).toFloat() / app.restTotalMs).coerceIn(0f, 1f)
+    Panel {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Rest  %d:%02d".format(java.util.Locale.ROOT, remaining / 60, remaining % 60),
+                color = AuraColors.Text,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Row {
+                TextButton(onClick = { app.extendRest(30) }) { Text("+30s", color = AuraColors.Accent) }
+                TextButton(onClick = app::endRest) { Text("Skip", color = AuraColors.Muted) }
+            }
+        }
+        Box(
+            modifier = Modifier.fillMaxWidth().height(4.dp).background(AuraColors.Border)
+        ) {
+            Box(Modifier.fillMaxWidth(fraction).fillMaxHeight().background(AuraColors.Accent))
         }
     }
 }

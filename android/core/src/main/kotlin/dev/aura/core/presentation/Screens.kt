@@ -55,6 +55,7 @@ data class LoggedSet(
     val weightKg: Double?,
     val reps: Int?,
     val isWarmup: Boolean,
+    val rpe: Double? = null,
 )
 
 data class SettingsState(
@@ -132,7 +133,7 @@ class Store(private val db: Db) {
             sets =
                 db.select(
                     """
-                    SELECT s.id, e.name AS exercise, s.weight_kg, s.reps, s.is_warmup
+                    SELECT s.id, e.name AS exercise, s.weight_kg, s.reps, s.rpe, s.is_warmup
                     FROM sets s
                     JOIN workouts w ON w.id = s.workout_id
                     JOIN exercises e ON e.id = s.exercise_id
@@ -146,6 +147,7 @@ class Store(private val db: Db) {
                         exercise = it.string("exercise"),
                         weightKg = it.doubleOrNull("weight_kg"),
                         reps = it.longOrNull("reps")?.toInt(),
+                        rpe = it.doubleOrNull("rpe"),
                         isWarmup = it.boolean("is_warmup"),
                     )
                 },
@@ -184,6 +186,7 @@ class Store(private val db: Db) {
         reps: Int?,
         isWarmup: Boolean = false,
         day: LocalDate = LocalDate.now(),
+        rpe: Double? = null,
     ) {
         val name = exercise.trim()
         require(name.isNotEmpty()) { "An exercise needs a name." }
@@ -222,10 +225,10 @@ class Store(private val db: Db) {
 
         db.execute(
             """
-            INSERT INTO sets (workout_id, exercise_id, position, weight_kg, reps, is_warmup)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO sets (workout_id, exercise_id, position, weight_kg, reps, rpe, is_warmup)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            listOf(workoutId, exerciseId, position, weightKg, reps, if (isWarmup) 1 else 0),
+            listOf(workoutId, exerciseId, position, weightKg, reps, rpe, if (isWarmup) 1 else 0),
         )
     }
 
